@@ -8,7 +8,7 @@ Author: Jeff Calder, 2020
 import numpy as np
 import datetime
 import matplotlib.pyplot as plt
-import matplotlib 
+import matplotlib
 import scipy.spatial as spatial
 import scipy.optimize as opt
 import numpy.random as random
@@ -20,10 +20,11 @@ from sklearn.decomposition import PCA
 import sys, getopt, time, csv, torch, os, multiprocessing
 from joblib import Parallel, delayed
 
-clustering_algorithms = ['incres','spectral','spectralshimalik','spectralngjordanweiss']
+clustering_algorithms = ['incres', 'spectral', 'spectralshimalik', 'spectralngjordanweiss']
+
 
 # Print iterations progress
-def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█'):
+def printProgressBar(iteration, total, prefix='', suffix='', decimals=1, length=100, fill='█'):
     """
     Call in a loop to create terminal progress bar
     @params:
@@ -38,211 +39,209 @@ def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, 
     percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
     filledLength = int(length * iteration // total)
     bar = fill * filledLength + '-' * (length - filledLength)
-    print('\r%s |%s| %s%% %s' % (prefix, bar, percent, suffix), end = '\r')
+    print('\r%s |%s| %s%% %s' % (prefix, bar, percent, suffix), end='\r')
     # Print New Line on Complete
-    if iteration == total: 
+    if iteration == total:
         print()
 
-def load_mbo_eig(dataset,metric,k):
 
-    #Load eigenvector data if MBO selected
+def load_mbo_eig(dataset, metric, k):
+    # Load eigenvector data if MBO selected
     try:
         location = os.path.dirname(os.path.realpath(__file__))
-        dataFile = dataset+"_"+metric+"_k%d"%k+"_spectrum.npz"
+        dataFile = dataset + "_" + metric + "_k%d" % k + "_spectrum.npz"
         dataFile_path = os.path.join(location, 'MBOdata', dataFile)
-        M = np.load(dataFile_path,allow_pickle=True)
+        M = np.load(dataFile_path, allow_pickle=True)
         eigvals = M['eigenvalues']
         eigvecs = M['eigenvectors']
     except:
-        print("Could not find MBOdata/"+dataset+"_"+metric+"_k%d"%k+"_spectrum.npz")
+        print("Could not find MBOdata/" + dataset + "_" + metric + "_k%d" % k + "_spectrum.npz")
         print('You need to run ComputeEigenvectorsMBO.py first.')
         sys.exit(2)
-    return eigvals,eigvecs
+    return eigvals, eigvecs
 
-def load_label_permutation(dataset,label_perm='',t='-1'):
 
+def load_label_permutation(dataset, label_perm='', t='-1'):
     location = os.path.dirname(os.path.realpath(__file__))
-    dataFile = dataset+label_perm+"_permutations.npz"
+    dataFile = dataset + label_perm + "_permutations.npz"
     dataFile_path = os.path.join(location, 'LabelPermutations', dataFile)
 
-    #Load label permutation
+    # Load label permutation
     try:
-        M = np.load(dataFile_path,allow_pickle=True)
+        M = np.load(dataFile_path, allow_pickle=True)
         perm = M['perm']
     except:
-        print('Cannot find '+dataFile)
+        print('Cannot find ' + dataFile)
         print('You need to run CreateLabelPermutation.py first.')
         sys.exit(2)
 
-    #Restrict trials
-    t = [int(e)  for e in t.split(',')]
+    # Restrict trials
+    t = [int(e) for e in t.split(',')]
     if t[0] > -1:
         if len(t) == 1:
             perm = perm[0:t[0]]
         else:
-            perm = perm[(t[0]-1):t[1]]
+            perm = perm[(t[0] - 1):t[1]]
 
     return perm
 
-def load_dataset(dataset,metric='L2'):
 
-    #For variational autoencoder the vae data, e.g., Data/MNIST_vae.npz must exist.
-    if metric[0:3]=='vae' or metric[0:3]=='aet':
-        dataFile = dataset+"_"+metric+".npz"
+def load_dataset(dataset, metric='L2'):
+    # For variational autoencoder the vae data, e.g., Data/MNIST_vae.npz must exist.
+    if metric[0:3] == 'vae' or metric[0:3] == 'aet':
+        dataFile = dataset + "_" + metric + ".npz"
     else:
-        dataFile = dataset+"_raw.npz"
+        dataFile = dataset + "_raw.npz"
 
     location = os.path.dirname(os.path.realpath(__file__))
     dataFile_path = os.path.join(location, 'Data', dataFile)
-    #Try to Load data
+    # Try to Load data
     try:
-        M = np.load(dataFile_path,allow_pickle=True)
+        M = np.load(dataFile_path, allow_pickle=True)
         data = M['data']
     except:
-        print('Cannot find '+dataFile+'.')
+        print('Cannot find ' + dataFile + '.')
         sys.exit(2)
-    
+
     return data
 
-def load_labels(dataset):
 
+def load_labels(dataset):
     location = os.path.dirname(os.path.realpath(__file__))
-    dataFile = dataset+"_labels.npz"
+    dataFile = dataset + "_labels.npz"
     dataFile_path = os.path.join(location, 'Data', dataFile)
 
-    #Load labels
+    # Load labels
     try:
-        M = np.load(dataFile_path,allow_pickle=True)
+        M = np.load(dataFile_path, allow_pickle=True)
         labels = M['labels']
     except:
-        print('Cannot find dataset Data/'+dataFile)
+        print('Cannot find dataset Data/' + dataFile)
         sys.exit(2)
 
     return labels
 
-def load_kNN_data(dataset,metric='L2'):
 
+def load_kNN_data(dataset, metric='L2'):
     location = os.path.dirname(os.path.realpath(__file__))
-    dataFile = dataset+"_"+metric+".npz"
+    dataFile = dataset + "_" + metric + ".npz"
     dataFile_path = os.path.join(location, 'kNNData', dataFile)
 
-    #Load kNN data
+    # Load kNN data
     try:
-        M = np.load(dataFile_path,allow_pickle=True)
+        M = np.load(dataFile_path, allow_pickle=True)
         I = M['I']
         J = M['J']
         D = M['D']
     except:
-        print('Cannot find '+dataFile)
+        print('Cannot find ' + dataFile)
         print('You need to run ComputeKNN.py.')
         sys.exit(2)
 
-    return I,J,D
+    return I, J, D
 
-#Compute sizes of each class
+
+# Compute sizes of each class
 def label_proportions(labels):
     L = np.unique(labels)
-    L = L[L>=0]    
+    L = L[L >= 0]
 
     k = len(L)
-    #n = len(labels)
-    n = np.sum(labels>=0)
+    # n = len(labels)
+    n = np.sum(labels >= 0)
     beta = np.zeros((k,))
     for i in range(k):
-        beta[i] = np.sum(labels==L[i])/n
+        beta[i] = np.sum(labels == L[i]) / n
 
     return beta
 
-#Constructs a weight matrix for graph on mxn grid with NSEW neighbors
-def grid_graph(m,n):
 
-    X,Y = np.mgrid[:m,:n]
+# Constructs a weight matrix for graph on mxn grid with NSEW neighbors
+def grid_graph(m, n):
+    X, Y = np.mgrid[:m, :n]
 
     return W
 
 
-#Reweights the graph to use self-tuning weights
-def self_tuning(W,D,alpha):
-    
+# Reweights the graph to use self-tuning weights
+def self_tuning(W, D, alpha):
     if alpha != 0:
         n = D.shape[0]
         k = D.shape[1]
-        d = D[:,k-1]
-        d = sparse.spdiags(d**(-alpha),0,n,n)
-        W = d*W*d
+        d = D[:, k - 1]
+        d = sparse.spdiags(d ** (-alpha), 0, n, n)
+        W = d * W * d
 
     return W
 
-#Reweights the graph based on a clustering prior
-def cluster_prior(W,cluster_labels):
-    
+
+# Reweights the graph based on a clustering prior
+def cluster_prior(W, cluster_labels):
     n = W.shape[0]
 
-    I,J,V = sparse.find(W)
+    I, J, V = sparse.find(W)
     K = cluster_labels[I] == cluster_labels[J]
-    V[K] = V[K]*10
-    V = V/np.max(V)
+    V[K] = V[K] * 10
+    V = V / np.max(V)
 
-    W = sparse.coo_matrix((V, (I,J)),shape=(n,n)).tocsr()
+    W = sparse.coo_matrix((V, (I, J)), shape=(n, n)).tocsr()
 
     return W
 
-#Computes scattering transform of depth 2 of I
-#Bruna, Joan, and Stéphane Mallat. "Invariant scattering convolution networks." IEEE transactions on pattern analysis and machine intelligence 35.8 (2013): 1872-1886.
-def scattering_transform(I,n,m,depth=2):
 
+# Computes scattering transform of depth 2 of I
+# Bruna, Joan, and Stéphane Mallat. "Invariant scattering convolution networks." IEEE transactions on pattern analysis and machine intelligence 35.8 (2013): 1872-1886.
+def scattering_transform(I, n, m, depth=2):
     from kymatio import Scattering2D
 
     num_pts = I.shape[0]
-    K = torch.from_numpy(I.reshape((num_pts,n,m))).float().contiguous() 
-    scattering = Scattering2D(J=depth, shape=(n,m))
+    K = torch.from_numpy(I.reshape((num_pts, n, m))).float().contiguous()
+    scattering = Scattering2D(J=depth, shape=(n, m))
     Z = scattering(K).numpy()
-    l = Z.shape[1]*Z.shape[2]*Z.shape[3]
+    l = Z.shape[1] * Z.shape[2] * Z.shape[3]
 
-    return Z.reshape((num_pts,l))
+    return Z.reshape((num_pts, l))
 
 
-#Label permutations
-#labels = labels
-#T = number of trials
-#r = label rate in (0,1)
-def create_label_permutations_rate(labels,T,R):
-
+# Label permutations
+# labels = labels
+# T = number of trials
+# r = label rate in (0,1)
+def create_label_permutations_rate(labels, T, R):
     perm = list()
     n = labels.shape[0]
     labelvals = np.unique(labels)
-    labelvals = labelvals[labelvals>=0]    
+    labelvals = labelvals[labelvals >= 0]
     num_labels = len(labelvals)
     num = np.zeros((num_labels,))
     for i in range(num_labels):
         num[i] = np.sum(labels == labelvals[i])
-    
+
     J = np.arange(n).astype(int)
     for k in range(T):
         for r in R:
             L = []
             for i in range(num_labels):
                 l = labelvals[i]
-                I = labels==l
+                I = labels == l
                 K = J[I]
-                m = round(num[i]*r/100)
-                L = L + random.choice(K,size=m.astype(int),replace=False).tolist()
+                m = round(num[i] * r / 100)
+                L = L + random.choice(K, size=m.astype(int), replace=False).tolist()
             L = np.array(L)
             perm.append(L)
 
     return perm
 
 
-#Label permutations
-#labels = labels
-#T = number of trials
-#m = vector of number of labels
-def create_label_permutations(labels,T,m,multiplier=None):
-
-    #Find all unique labels >= 0
-    #Negative numbers indicate unlabeled nodes
+# Label permutations
+# labels = labels
+# T = number of trials
+# m = vector of number of labels
+def create_label_permutations(labels, T, m, multiplier=None):
+    # Find all unique labels >= 0
+    # Negative numbers indicate unlabeled nodes
     unique_labels = np.unique(labels)
-    unique_labels = unique_labels[unique_labels>=0]    
+    unique_labels = unique_labels[unique_labels >= 0]
 
     perm = list()
     n = labels.shape[0]
@@ -252,207 +251,204 @@ def create_label_permutations(labels,T,m,multiplier=None):
             L = []
             ind = 0
             for l in unique_labels:
-                I = labels==l
+                I = labels == l
                 K = J[I]
                 if multiplier is None:
-                    L = L + random.choice(K,size=i,replace=False).tolist()
+                    L = L + random.choice(K, size=i, replace=False).tolist()
                 else:
-                    sze = int(np.round(i*multiplier[ind]))
-                    L = L + random.choice(K,size=sze,replace=False).tolist()
+                    sze = int(np.round(i * multiplier[ind]))
+                    L = L + random.choice(K, size=sze, replace=False).tolist()
                 ind = ind + 1
             L = np.array(L)
             perm.append(L)
 
     return perm
 
-#Randomly choose m labels per class
-def randomize_labels(L,m):
 
-    perm = create_label_permutations(L,1,[m])
+# Randomly choose m labels per class
+def randomize_labels(L, m):
+    perm = create_label_permutations(L, 1, [m])
 
     return perm[0]
 
-#Default function
+
+# Default function
 def exp_weight(x):
     return np.exp(-x)
 
-#Pointwise max of non-negative sparse matrices A and B
-def sparse_max(A,B):
 
+# Pointwise max of non-negative sparse matrices A and B
+def sparse_max(A, B):
     I = (A + B) > 0
-    IB = B>A
+    IB = B > A
     IA = I - IB
 
     return A.multiply(IA) + B.multiply(IB)
 
 
-#Compute degrees of weight matrix W
+# Compute degrees of weight matrix W
 def degrees(W):
+    return np.squeeze(np.array(np.sum(W, axis=1)))
 
-    return np.squeeze(np.array(np.sum(W,axis=1)))
+
+# Multiply diagonal of matrix by degree
+def diag_multiply(W, b):
+    n = W.shape[0]  # Number of points
+
+    D = sparse.spdiags(W.diagonal(), 0, n, n)
+
+    return W - (1 - b) * D
 
 
-#Multiply diagonal of matrix by degree
-def diag_multiply(W,b):
+# Compute degrees of weight matrix W
+# Returns sparse matrix with degrees on diagonal
+def degree_matrix(W, p=1):
+    n = W.shape[0]  # Number of points
 
-    n = W.shape[0]  #Number of points
-
-    D = sparse.spdiags(W.diagonal(),0,n,n)
-    
-    return W - (1-b)*D
-
-#Compute degrees of weight matrix W
-#Returns sparse matrix with degrees on diagonal
-def degree_matrix(W,p=1):
-
-    n = W.shape[0]  #Number of points
-
-    #Construct sparse degree matrix
+    # Construct sparse degree matrix
     d = degrees(W)
-    D = sparse.spdiags(d**p,0,n,n)
+    D = sparse.spdiags(d ** p, 0, n, n)
 
     return D.tocsr()
 
-#Construct robin boundary condition matrix
-def robin_bc_matrix(X,nu,eps,gamma):
 
+# Construct robin boundary condition matrix
+def robin_bc_matrix(X, nu, eps, gamma):
     n = X.shape[0]
     Xtree = spatial.cKDTree(X)
-    _,nn_ind = Xtree.query(X + eps*nu)
-    #nn_dist = np.linalg.norm(X - X[nn_ind,:],axis=1)
-    nn_dist = eps*np.ones((n,))
+    _, nn_ind = Xtree.query(X + eps * nu)
+    # nn_dist = np.linalg.norm(X - X[nn_ind,:],axis=1)
+    nn_dist = eps * np.ones((n,))
 
-    #Robin matrix
-    A = sparse.spdiags(gamma + (1-gamma)/nn_dist,0,n,n)
-    B = sparse.coo_matrix(((1-gamma)/nn_dist, (range(n),nn_ind)),shape=(n,n))
+    # Robin matrix
+    A = sparse.spdiags(gamma + (1 - gamma) / nn_dist, 0, n, n)
+    B = sparse.coo_matrix(((1 - gamma) / nn_dist, (range(n), nn_ind)), shape=(n, n))
     R = (A - B).tocsr()
 
     return R
 
 
-#Laplace matrix
-#W = weight matrix
-#norm = type of normalization
+# Laplace matrix
+# W = weight matrix
+# norm = type of normalization
 #   Options: none, randomwalk, normalized
-def graph_laplacian(W,norm="none"):
-
+def graph_laplacian(W, norm="none"):
     D = degree_matrix(W)
 
-    if norm=="none":
+    if norm == "none":
         L = D - W
-    elif norm=="randomwalk1":
-        Dinv = degree_matrix(W,p=-1)
-        L = Dinv*(D-W)
-    elif norm=="randomwalk2":
-        Dinv = degree_matrix(W,p=-1)
-        L = (D-W)*Dinv
-    elif norm=="normalized":
-        Dinv2 = degree_matrix(W,p=-1/2)
-        L = Dinv2*(D-W)*Dinv2
+    elif norm == "randomwalk1":
+        Dinv = degree_matrix(W, p=-1)
+        L = Dinv * (D - W)
+    elif norm == "randomwalk2":
+        Dinv = degree_matrix(W, p=-1)
+        L = (D - W) * Dinv
+    elif norm == "normalized":
+        Dinv2 = degree_matrix(W, p=-1 / 2)
+        L = Dinv2 * (D - W) * Dinv2
     else:
         print("Invalid option for graph Laplacian normalization. Returning unnormalized Laplacian.")
         L = D - W
 
     return L.tocsr()
 
-#Graph infinity Laplacian
-#W = sparse weight matrix
-#u = function on graph
-def graph_phi_laplacian(W,u,phi,I=None,J=None,V=None):
 
+# Graph infinity Laplacian
+# W = sparse weight matrix
+# u = function on graph
+def graph_phi_laplacian(W, u, phi, I=None, J=None, V=None):
     n = W.shape[0]
     if I is None or J is None:
-        I,J,V = sparse.find(W)
+        I, J, V = sparse.find(W)
 
-    w = u[J]-u[I]
+    w = u[J] - u[I]
     a = np.absolute(w)
     pa = phi(a)
-    m = pa/(a+1e-13)
-    M = sparse.coo_matrix((V*pa/(a+1e-13), (I,J)),shape=(n,n)).tocsr()
+    m = pa / (a + 1e-13)
+    M = sparse.coo_matrix((V * pa / (a + 1e-13), (I, J)), shape=(n, n)).tocsr()
     m = degrees(M)
 
-    M = sparse.coo_matrix((V*pa*np.sign(w), (I,J)),shape=(n,n)).tocsr()
-    M = np.squeeze(np.array(np.sum(M,axis=1)))
+    M = sparse.coo_matrix((V * pa * np.sign(w), (I, J)), shape=(n, n)).tocsr()
+    M = np.squeeze(np.array(np.sum(M, axis=1)))
 
     return M, m
 
 
-#Graph infinity Laplacian
-#W = sparse weight matrix
-#u = function on graph
-def graph_infinity_laplacian(W,u,I=None,J=None,V=None):
-
+# Graph infinity Laplacian
+# W = sparse weight matrix
+# u = function on graph
+def graph_infinity_laplacian(W, u, I=None, J=None, V=None):
     n = W.shape[0]
     if I is None or J is None:
-        I,J,V = sparse.find(W)
-    M = sparse.coo_matrix((V*(u[J]-u[I]), (I,J)),shape=(n,n)).tocsr()
+        I, J, V = sparse.find(W)
+    M = sparse.coo_matrix((V * (u[J] - u[I]), (I, J)), shape=(n, n)).tocsr()
     M = M.min(axis=1) + M.max(axis=1)
 
     return M.toarray().flatten()
 
 
-#Construct epsilon-graph sparse distance matrix
-def eps_weight_matrix(X,eps,f=exp_weight):
+# Construct epsilon-graph sparse distance matrix
+def eps_weight_matrix(X, eps, f=exp_weight):
+    n = X.shape[0]  # Number of points
 
-    n = X.shape[0]  #Number of points
-
-    #Rangesearch to find nearest neighbors
+    # Rangesearch to find nearest neighbors
     Xtree = spatial.cKDTree(X)
     M = Xtree.query_pairs(eps)
     M = np.array(list(M))
 
-    #Differences between points and neighbors
-    V = X[M[:,0],:] - X[M[:,1],:]
-    D = np.sum(V*V,axis=1)
+    # Differences between points and neighbors
+    V = X[M[:, 0], :] - X[M[:, 1], :]
+    D = np.sum(V * V, axis=1)
 
-    #Weights
-    D = f(4*D/(eps*eps))
+    # Weights
+    D = f(4 * D / (eps * eps))
 
-    #Symmetrize weights and add diagonal entries
-    D = np.concatenate((D,D,f(0)*np.ones(n,)))
-    M1 = np.concatenate((M[:,0],M[:,1],np.arange(0,n)))
-    M2 = np.concatenate((M[:,1],M[:,0],np.arange(0,n)))
+    # Symmetrize weights and add diagonal entries
+    D = np.concatenate((D, D, f(0) * np.ones(n, )))
+    M1 = np.concatenate((M[:, 0], M[:, 1], np.arange(0, n)))
+    M2 = np.concatenate((M[:, 1], M[:, 0], np.arange(0, n)))
 
-    #Construct sparse matrix and convert to Compressed Sparse Row (CSR) format
-    W = sparse.coo_matrix((D, (M1,M2)),shape=(n,n))
+    # Construct sparse matrix and convert to Compressed Sparse Row (CSR) format
+    W = sparse.coo_matrix((D, (M1, M2)), shape=(n, n))
 
     return W.tocsr()
 
-#Exact knnsearch
-def knnsearch(X,k):
-    #KDtree to find nearest neighbors
+
+# Exact knnsearch
+def knnsearch(X, k):
+    # KDtree to find nearest neighbors
     n = X.shape[0]
     Xtree = spatial.cKDTree(X)
-    D, J = Xtree.query(X,k=k)
-    I = np.ones((n,k),dtype=int)*J[:,0][:,None]
+    D, J = Xtree.query(X, k=k)
+    I = np.ones((n, k), dtype=int) * J[:, 0][:, None]
 
-    return I,J,D
+    return I, J, D
 
-#Perform approximate nearest neighbor search, returning indices I,J of neighbors, and distance D
+
+# Perform approximate nearest neighbor search, returning indices I,J of neighbors, and distance D
 # Metric can be "angular", "euclidean", "manhattan", "hamming", or "dot".
-def knnsearch_annoy(X,k, similarity='euclidean'):
-
+def knnsearch_annoy(X, k, similarity='euclidean'):
     from annoy import AnnoyIndex
 
-    n = X.shape[0]  #Number of points
-    dim = X.shape[1]#Dimension
+    n = X.shape[0]  # Number of points
+    dim = X.shape[1]  # Dimension
 
     print('kNN search with Annoy approximate nearest neighbor package...')
-    printProgressBar(0, n, prefix = 'Progress:', suffix = 'Complete', length = 50)
+    printProgressBar(0, n, prefix='Progress:', suffix='Complete', length=50)
 
     u = AnnoyIndex(dim, similarity)  # Length of item vector that will be indexed
     for i in range(n):
-        u.add_item(i, X[i,:])
+        u.add_item(i, X[i, :])
 
-    u.build(10)  #10 trees
-    
+    u.build(10)  # 10 trees
+
     D = []
     I = []
     J = []
     for i in range(n):
-        printProgressBar(i+1, n, prefix = 'Progress:', suffix = 'Complete', length = 50)
-        A = u.get_nns_by_item(i, k,include_distances=True,search_k=-1)
-        I.append([i]*k)
+        printProgressBar(i + 1, n, prefix='Progress:', suffix='Complete', length=50)
+        A = u.get_nns_by_item(i, k, include_distances=True, search_k=-1)
+        I.append([i] * k)
         J.append(A[0])
         D.append(A[1])
 
@@ -460,815 +456,813 @@ def knnsearch_annoy(X,k, similarity='euclidean'):
     J = np.array(J)
     D = np.array(D)
 
-    return I,J,D
+    return I, J, D
 
-#Compute weight matrix from nearest neighbor indices I,J and distances D
-def weight_matrix_selftuning(I,J,D):
 
+# Compute weight matrix from nearest neighbor indices I,J and distances D
+def weight_matrix_selftuning(I, J, D):
     n = I.shape[0]
     k = I.shape[1]
 
-    #Distance to kth nearest neighbor as a matrix
-    sigma = D[:,k-1]
-    sigma = sparse.spdiags(1/sigma,0,n,n)
+    # Distance to kth nearest neighbor as a matrix
+    sigma = D[:, k - 1]
+    sigma = sparse.spdiags(1 / sigma, 0, n, n)
     sigma = sigma.tocsr()
 
-    #Flatten
+    # Flatten
     I = I.flatten()
     J = J.flatten()
     D = D.flatten()
 
-    #Symmetrize and remove redundant entries
-    M1 = np.vstack((I,J,D))
-    M2 = np.vstack((J,I,D))
-    M = np.concatenate((M1,M2),axis=1)
-    M = np.unique(M,axis=1)
+    # Symmetrize and remove redundant entries
+    M1 = np.vstack((I, J, D))
+    M2 = np.vstack((J, I, D))
+    M = np.concatenate((M1, M2), axis=1)
+    M = np.unique(M, axis=1)
 
-    #Construct sparse matrix and convert to Compressed Sparse Row (CSR) format
-    I = M[0,:]
-    J = M[1,:]
-    D = M[2,:]
-    dist = sparse.coo_matrix((D,(I,J)),shape=(n,n)).tocsr()
-    B = sparse.coo_matrix((np.ones(len(D),),(I,J)),shape=(n,n)).tocsr() #Ones in all entries
+    # Construct sparse matrix and convert to Compressed Sparse Row (CSR) format
+    I = M[0, :]
+    J = M[1, :]
+    D = M[2, :]
+    dist = sparse.coo_matrix((D, (I, J)), shape=(n, n)).tocsr()
+    B = sparse.coo_matrix((np.ones(len(D), ), (I, J)), shape=(n, n)).tocsr()  # Ones in all entries
 
-    #Self-tuning weights
-    E = -4*sigma*(dist**2)*sigma
+    # Self-tuning weights
+    E = -4 * sigma * (dist ** 2) * sigma
     W = E.expm1()
     W = W.multiply(B) + B
 
     return W
 
-#Compute weight matrix from nearest neighbor indices I,J and distances D
-#k = number of neighbors
-#Chooses k neighbors at random from I.shape[1] nearset neighbors
-def weight_matrix_homogenized(I,J,D,k,f=exp_weight):
 
-    #I = I[:,:10]
-    #J = J[:,:10]
-    #D = D[:,:10]
+# Compute weight matrix from nearest neighbor indices I,J and distances D
+# k = number of neighbors
+# Chooses k neighbors at random from I.shape[1] nearset neighbors
+def weight_matrix_homogenized(I, J, D, k, f=exp_weight):
+    # I = I[:,:10]
+    # J = J[:,:10]
+    # D = D[:,:10]
 
-    #Restrict I,J,D to k neighbors
-    k = np.minimum(I.shape[1],k)
+    # Restrict I,J,D to k neighbors
+    k = np.minimum(I.shape[1], k)
     n = I.shape[0]
     for i in range(n):
-        ind = random.choice(I.shape[1],k,replace=False)
-        I[i,:k] = I[i,ind]
-        J[i,:k] = J[i,ind]
-        D[i,:k] = 1
+        ind = random.choice(I.shape[1], k, replace=False)
+        I[i, :k] = I[i, ind]
+        J[i, :k] = J[i, ind]
+        D[i, :k] = 1
 
     n = I.shape[0]
     k = I.shape[1]
 
-    D = D*D
-    eps = D[:,k-1]/4
-    D = f(D/eps[:,None])
+    D = D * D
+    eps = D[:, k - 1] / 4
+    D = f(D / eps[:, None])
 
-    #Flatten
+    # Flatten
     I = I.flatten()
     J = J.flatten()
     D = D.flatten()
 
-    #Construct sparse matrix and convert to Compressed Sparse Row (CSR) format
-    W = sparse.coo_matrix((D, (I,J)),shape=(n,n)).tocsr()
+    # Construct sparse matrix and convert to Compressed Sparse Row (CSR) format
+    W = sparse.coo_matrix((D, (I, J)), shape=(n, n)).tocsr()
 
     return W
 
-#Compute distance matrix from nearest neighbor indices I,J and distances D
-#k = number of neighbors
-def dist_matrix(I,J,D,k):
 
-    #Restrict I,J,D to k neighbors
-    k = np.minimum(I.shape[1],k)
-    I = I[:,:k]
-    J = J[:,:k]
-    D = D[:,:k]
+# Compute distance matrix from nearest neighbor indices I,J and distances D
+# k = number of neighbors
+def dist_matrix(I, J, D, k):
+    # Restrict I,J,D to k neighbors
+    k = np.minimum(I.shape[1], k)
+    I = I[:, :k]
+    J = J[:, :k]
+    D = D[:, :k]
 
     n = I.shape[0]
     k = I.shape[1]
 
-    #Flatten
+    # Flatten
     I = I.flatten()
     J = J.flatten()
     D = D.flatten()
 
-    #Construct sparse matrix and convert to Compressed Sparse Row (CSR) format
-    W = sparse.coo_matrix((D, (I,J)),shape=(n,n)).tocsr()
+    # Construct sparse matrix and convert to Compressed Sparse Row (CSR) format
+    W = sparse.coo_matrix((D, (I, J)), shape=(n, n)).tocsr()
 
     return W
 
-#Adds weights to an adjacency matrix W using similarity in data X
-def add_weights(W,X,labels):
 
+# Adds weights to an adjacency matrix W using similarity in data X
+def add_weights(W, X, labels):
     n = W.shape[0]
 
-    #pca = PCA(n_components=20)
-    #X = pca.fit_transform(X)
-    #print(X.shape)
+    # pca = PCA(n_components=20)
+    # X = pca.fit_transform(X)
+    # print(X.shape)
 
-    I,J,V = sparse.find(W)
-    
-    #Dot products
-    Y = X[I,:]-X[J,:]
-    Y = np.sum(Y*Y,axis=1)
+    I, J, V = sparse.find(W)
 
-    W = sparse.coo_matrix((Y, (I,J)),shape=(n,n)).tocsr()
-    max_dist = np.reshape(np.max(W,axis=1).todense().tolist(),(n,))
-    D = sparse.spdiags((max_dist+1e-10)**(-1),0,n,n).tocsr()
-    W = D*W
+    # Dot products
+    Y = X[I, :] - X[J, :]
+    Y = np.sum(Y * Y, axis=1)
 
-    I,J,V = sparse.find(W)
-    V = np.exp(-2*V)
-    W = sparse.coo_matrix((V, (I,J)),shape=(n,n)).tocsr()
+    W = sparse.coo_matrix((Y, (I, J)), shape=(n, n)).tocsr()
+    max_dist = np.reshape(np.max(W, axis=1).todense().tolist(), (n,))
+    D = sparse.spdiags((max_dist + 1e-10) ** (-1), 0, n, n).tocsr()
+    W = D * W
+
+    I, J, V = sparse.find(W)
+    V = np.exp(-2 * V)
+    W = sparse.coo_matrix((V, (I, J)), shape=(n, n)).tocsr()
 
     return W
 
-#Finds largest connected component of the graph represented by adjacency matrix W
-#Returns the weighted adjacency matrix, along with a boolean mask indicating the 
-#vertices from the input matrix that were selected
-def largest_conn_component(W):
 
-    ncomp,labels = csgraph.connected_components(W,directed=False) 
+# Finds largest connected component of the graph represented by adjacency matrix W
+# Returns the weighted adjacency matrix, along with a boolean mask indicating the
+# vertices from the input matrix that were selected
+def largest_conn_component(W):
+    ncomp, labels = csgraph.connected_components(W, directed=False)
     num_verts = np.zeros((ncomp,))
     for i in range(ncomp):
-        num_verts[i] = np.sum(labels==i)
-    
+        num_verts[i] = np.sum(labels == i)
+
     i_max = np.argmax(num_verts)
-    ind = labels==i_max
+    ind = labels == i_max
 
-    A = W[ind,:]
-    A = A[:,ind]
+    A = W[ind, :]
+    A = A[:, ind]
 
-    print("Found %d"%ncomp+" connected components.")
-    print("Returning component with %d"%num_verts[i_max]+" vertices out of %d"%W.shape[0]+" total vertices.")
+    print("Found %d" % ncomp + " connected components.")
+    print("Returning component with %d" % num_verts[i_max] + " vertices out of %d" % W.shape[0] + " total vertices.")
 
-    return A,ind
+    return A, ind
 
-#Compute weight matrix from nearest neighbor indices I,J and distances D
-#k = number of neighbors
-def weight_matrix(I,J,D,k,f=exp_weight,symmetrize=True):
 
-    #Restrict I,J,D to k neighbors
-    k = np.minimum(I.shape[1],k)
-    I = I[:,:k]
-    J = J[:,:k]
-    D = D[:,:k]
+# Compute weight matrix from nearest neighbor indices I,J and distances D
+# k = number of neighbors
+def weight_matrix(I, J, D, k, f=exp_weight, symmetrize=True):
+    # Restrict I,J,D to k neighbors
+    k = np.minimum(I.shape[1], k)
+    I = I[:, :k]
+    J = J[:, :k]
+    D = D[:, :k]
 
     n = I.shape[0]
     k = I.shape[1]
 
-    D = D*D
-    eps = D[:,k-1]/4
-    D = f(D/eps[:,None])
+    D = D * D
+    eps = D[:, k - 1] / 4
+    D = f(D / eps[:, None])
 
-    #Flatten
+    # Flatten
     I = I.flatten()
     J = J.flatten()
     D = D.flatten()
 
-    #Construct sparse matrix and convert to Compressed Sparse Row (CSR) format
-    W = sparse.coo_matrix((D, (I,J)),shape=(n,n)).tocsr()
+    # Construct sparse matrix and convert to Compressed Sparse Row (CSR) format
+    W = sparse.coo_matrix((D, (I, J)), shape=(n, n)).tocsr()
 
     if symmetrize:
-        W = (W + W.transpose())/2;
+        W = (W + W.transpose()) / 2
 
     return W
 
-#Compute boundary points
-#k = number of neighbors to use
-def boundary_points(X,k,I=None,J=None,D=None,ReturnNormals=False):
 
+# Compute boundary points
+# k = number of neighbors to use
+def boundary_points(X, k, I=None, J=None, D=None, ReturnNormals=False):
     if (I is None) or (J is None) or (D is None):
         n = X.shape[0]
         d = X.shape[1]
         if d == 2:
-            I,J,D = knnsearch(X,k)
+            I, J, D = knnsearch(X, k)
         else:
-            I,J,D = knnsearch_annoy(X,k)
-    
-    #Restrict I,J,D to k neighbors
-    k = np.minimum(I.shape[1],k)
+            I, J, D = knnsearch_annoy(X, k)
+
+    # Restrict I,J,D to k neighbors
+    k = np.minimum(I.shape[1], k)
     n = X.shape[0]
-    I = I[:,:k]
-    J = J[:,:k]
-    D = D[:,:k]
+    I = I[:, :k]
+    J = J[:, :k]
+    D = D[:, :k]
 
-    W = weight_matrix(I,J,D,k,f=lambda x : np.ones_like(x),symmetrize=False)
+    W = weight_matrix(I, J, D, k, f=lambda x: np.ones_like(x), symmetrize=False)
     L = graph_laplacian(W)
-    
-    #Estimates of normal vectors
-    nu = -L*X
+
+    # Estimates of normal vectors
+    nu = -L * X
     nu = np.transpose(nu)
-    norms = np.sqrt(np.sum(nu*nu,axis=0))
-    nu = nu/norms
+    norms = np.sqrt(np.sum(nu * nu, axis=0))
+    nu = nu / norms
     nu = np.transpose(nu)
 
-    #Boundary test
-    Y = np.swapaxes(X[J],0,1)*nu
-    Y = np.sum(Y,axis=2) 
-    Y = Y[0,:] - Y
-    Y = np.max(Y[1:,:],axis=0)
-    
+    # Boundary test
+    Y = np.swapaxes(X[J], 0, 1) * nu
+    Y = np.sum(Y, axis=2)
+    Y = Y[0, :] - Y
+    Y = np.max(Y[1:, :], axis=0)
+
     if ReturnNormals:
-        return Y,nu
+        return Y, nu
     else:
         return Y
 
 
-#Construct k-nn sparse distance matrix
-#Note: Matrix is not symmetric
-def knn_weight_matrix(X,k,f=exp_weight):
+# Construct k-nn sparse distance matrix
+# Note: Matrix is not symmetric
+def knn_weight_matrix(X, k, f=exp_weight):
+    I, J, D = knnsearch_annoy(X, k)
+    W = weight_matrix(I, J, D, k, f=f)
 
-    I,J,D = knnsearch_annoy(X,k)
-    W = weight_matrix(I,J,D,k,f=f)
-   
     return W
 
-#Solves Lx=f subject to Rx=g at ind points
-def gmres_bc_solve(L,f,R,g,ind):
 
-    #Mix matrices based on boundary points
+# Solves Lx=f subject to Rx=g at ind points
+def gmres_bc_solve(L, f, R, g, ind):
+    # Mix matrices based on boundary points
     A = L.copy()
     A = A.tolil()
-    A[ind,:] = R[ind,:]
+    A[ind, :] = R[ind, :]
     A = A.tocsr()
 
-    #Right hand side
+    # Right hand side
     b = f.copy()
     b[ind] = g[ind]
 
-    #Preconditioner
+    # Preconditioner
     m = A.shape[0]
     M = A.diagonal()
-    M = sparse.spdiags(1/M,0,m,m).tocsr()
+    M = sparse.spdiags(1 / M, 0, m, m).tocsr()
 
-    #GMRES solver
-    #start_time = time.time()
-    u,info = sparse.linalg.gmres(A,b,M=M)
-    #print("--- %s seconds ---" % (time.time() - start_time))
+    # GMRES solver
+    # start_time = time.time()
+    u, info = sparse.linalg.gmres(A, b, M=M)
+    # print("--- %s seconds ---" % (time.time() - start_time))
 
-    #print('gmres_err = %f'%np.max(np.absolute(A*u-b)))
+    # print('gmres_err = %f'%np.max(np.absolute(A*u-b)))
 
     return u
 
-#Poisson solve
-#Solves Lu = f with preconditioned conjugate gradient
-def pcg_solve(L,f,x0=None,tol=1e-10):
 
-    #start_time = time.time()
+# Poisson solve
+# Solves Lu = f with preconditioned conjugate gradient
+def pcg_solve(L, f, x0=None, tol=1e-10):
+    # start_time = time.time()
     L = L.tocsr()
 
-    #Conjugate gradient with Jacobi preconditioner
+    # Conjugate gradient with Jacobi preconditioner
     m = L.shape[0]
     M = L.diagonal()
-    M = sparse.spdiags(1/M,0,m,m).tocsr()
+    M = sparse.spdiags(1 / M, 0, m, m).tocsr()
     if x0 is None:
-        u,i = splinalg.cg(L,f,tol=tol,M=M)
+        u, i = splinalg.cg(L, f, tol=tol, M=M)
     else:
-        u,i = splinalg.cg(L,f,x0=x0,tol=tol,M=M)
-    #print("--- %s seconds ---" % (time.time() - start_time))
+        u, i = splinalg.cg(L, f, x0=x0, tol=tol, M=M)
+    # print("--- %s seconds ---" % (time.time() - start_time))
 
     return u
 
-#Finds k Dirichlet eigenvectors
-#Solves Lu = lambda u subject to u(I)=0
-def dirichlet_eigenvectors(L,I,k):
 
+# Finds k Dirichlet eigenvectors
+# Solves Lu = lambda u subject to u(I)=0
+def dirichlet_eigenvectors(L, I, k):
     L = L.tocsr()
     n = L.shape[0]
 
-    #Locations of labels
+    # Locations of labels
     idx = np.full((n,), True, dtype=bool)
     idx[I] = False
 
-    #Left hand side matrix
-    A = L[idx,:]
-    A = A[:,idx]
-    
-    #Eigenvector solver
-    vals, vec = sparse.linalg.eigs(A,k=k,which='SM')
+    # Left hand side matrix
+    A = L[idx, :]
+    A = A[:, idx]
+
+    # Eigenvector solver
+    vals, vec = sparse.linalg.eigs(A, k=k, which='SM')
     vec = vec.real
     vals = vals.real
-    
-    #Add labels back into array
-    u = np.zeros((n,k))
-    u[idx,:] = vec
+
+    # Add labels back into array
+    u = np.zeros((n, k))
+    u[idx, :] = vec
 
     if k == 1:
         u = u.flatten()
 
-    return u,vals
+    return u, vals
 
-#Constrained linear solve
-#Solves Lu = f subject to u(I)=g
-def constrained_solve(L,I,g,f=None,x0=None,tol=1e-10):
 
+# Constrained linear solve
+# Solves Lu = f subject to u(I)=g
+def constrained_solve(L, I, g, f=None, x0=None, tol=1e-10):
     L = L.tocsr()
     n = L.shape[0]
 
-    #Locations of labels
+    # Locations of labels
     idx = np.full((n,), True, dtype=bool)
     idx[I] = False
 
-    #Right hand side
-    b = -L[:,I]*g
+    # Right hand side
+    b = -L[:, I] * g
     b = b[idx]
 
     if f is not None:
         b = b + f[idx]
 
-    #Left hand side matrix
-    A = L[idx,:]
-    A = A[:,idx]
-    
-    #start_time = time.time()
+    # Left hand side matrix
+    A = L[idx, :]
+    A = A[:, idx]
 
-    #Conjugate gradient with Jacobi preconditioner
+    # start_time = time.time()
+
+    # Conjugate gradient with Jacobi preconditioner
     m = A.shape[0]
     M = A.diagonal()
-    M = sparse.spdiags(1/(M+1e-10),0,m,m).tocsr()
+    M = sparse.spdiags(1 / (M + 1e-10), 0, m, m).tocsr()
 
     if x0 is None:
-        v,i = splinalg.cg(A,b,tol=tol,M=M)
+        v, i = splinalg.cg(A, b, tol=tol, M=M)
     else:
-        v,i = splinalg.cg(A,b,x0=x0[idx],tol=tol,M=M)
-    #print("--- %s seconds ---" % (time.time() - start_time))
+        v, i = splinalg.cg(A, b, x0=x0[idx], tol=tol, M=M)
+    # print("--- %s seconds ---" % (time.time() - start_time))
 
-    #Add labels back into array
+    # Add labels back into array
     u = np.ones((n,))
     u[idx] = v
     u[I] = g
 
     return u
 
-#Returns n random points in R^d
-def rand(n,d):
-    return random.rand(n,d)
 
-#Returns n random points in unit ball in R^d
-def rand_ball(n,d):
+# Returns n random points in R^d
+def rand(n, d):
+    return random.rand(n, d)
 
+
+# Returns n random points in unit ball in R^d
+def rand_ball(n, d):
     N = 0
-    X = np.zeros((1,d))
+    X = np.zeros((1, d))
     while X.shape[0] <= n:
+        Y = 2 * rand(n, d) - 1
+        I = np.sum(Y * Y, axis=1) < 1
+        Y = Y[I, :]
+        X = np.vstack((X, Y))
 
-        Y = 2*rand(n,d) - 1
-        I = np.sum(Y*Y,axis=1) < 1
-        Y = Y[I,:]
-        X = np.vstack((X,Y))
-
-
-    X = X[1:(n+1)]
+    X = X[1:(n + 1)]
     return X
 
 
-def randn(n,d):
-    X = np.zeros((n,d))
+def randn(n, d):
+    X = np.zeros((n, d))
     for i in range(d):
-        X[:,i] = np.random.normal(0,1,n) 
+        X[:, i] = np.random.normal(0, 1, n)
 
     return X
 
-def bean_data(n,h):
 
-    #n = number of points
-    #h = height of bridge (h=0.2)
+def bean_data(n, h):
+    # n = number of points
+    # h = height of bridge (h=0.2)
 
-    a=-1
-    b=1
-    x = a + (b-a)*random.rand(3*n);
-    c=-0.6
-    d=0.6;
-    y = c + (d-c)*random.rand(3*n);
+    a = -1
+    b = 1
+    x = a + (b - a) * random.rand(3 * n);
+    c = -0.6
+    d = 0.6;
+    y = c + (d - c) * random.rand(3 * n);
 
-    X=np.transpose(np.vstack((x,y)))
+    X = np.transpose(np.vstack((x, y)))
 
-    dist_from_x_axis=0.4*np.sqrt(1-x**2)*(1+h-np.cos(3*x))
+    dist_from_x_axis = 0.4 * np.sqrt(1 - x ** 2) * (1 + h - np.cos(3 * x))
     in_bean = abs(y) <= dist_from_x_axis
-    X = X[in_bean,:]
+    X = X[in_bean, :]
     if X.shape[0] < n:
         print('Not enough samples');
     else:
-        X = X[:n,:]
+        X = X[:n, :]
 
     return X
 
-    
+
 def mesh(X):
-    T = spatial.Delaunay(X[:,:2]);
+    T = spatial.Delaunay(X[:, :2]);
     return T.simplices
 
-def box_mesh(X,u=None):
 
+def box_mesh(X, u=None):
     n = X.shape[0]
     d = X.shape[1]
     if d > 2:
-        X = X[:,0:2]
+        X = X[:, 0:2]
 
-    x1 = X[:,0].min()
-    x2 = X[:,0].max()
-    y1 = X[:,1].min()
-    y2 = X[:,1].max()
-    corners = np.array([[x1,y1],[x2,y2],[x1,y2],[x2,y1]])
-    X = np.append(X,corners,axis=0)
+    x1 = X[:, 0].min()
+    x2 = X[:, 0].max()
+    y1 = X[:, 1].min()
+    y2 = X[:, 1].max()
+    corners = np.array([[x1, y1], [x2, y2], [x1, y2], [x2, y1]])
+    X = np.append(X, corners, axis=0)
 
     Tri = mesh(X)
-    
+
     if u is not None:
-        u = np.append(u,[0,0,0,0])
-        for i in range(n,n+4):
-            I = (Tri[:,0] == i) | (Tri[:,1] == i) | (Tri[:,2] == i)
-            nn_tri = Tri[I,:].flatten()
+        u = np.append(u, [0, 0, 0, 0])
+        for i in range(n, n + 4):
+            I = (Tri[:, 0] == i) | (Tri[:, 1] == i) | (Tri[:, 2] == i)
+            nn_tri = Tri[I, :].flatten()
             nn_tri = np.unique(nn_tri[nn_tri < n])
             u[i] = np.mean(u[nn_tri])
-            #u[i] = np.max(u[nn_tri])
+            # u[i] = np.max(u[nn_tri])
 
-        return X,Tri,u
+        return X, Tri, u
     else:
-        return X,Tri
+        return X, Tri
 
-#Triangulation of domain
+
+# Triangulation of domain
 def improved_mesh(X):
-
     n = X.shape[0]
     d = X.shape[1]
     if d > 2:
-        X = X[:,0:2]
+        X = X[:, 0:2]
 
-    #Normalize data to unit box
-    x1 = X[:,0].min()
-    x2 = X[:,0].max()
-    y1 = X[:,1].min()
-    y2 = X[:,1].max()
-    X = X - [x1,y1]
-    X[:,0] = X[:,0]/(x2-x1)
-    X[:,1] = X[:,1]/(y2-y1)
+    # Normalize data to unit box
+    x1 = X[:, 0].min()
+    x2 = X[:, 0].max()
+    y1 = X[:, 1].min()
+    y2 = X[:, 1].max()
+    X = X - [x1, y1]
+    X[:, 0] = X[:, 0] / (x2 - x1)
+    X[:, 1] = X[:, 1] / (y2 - y1)
 
-    #Add padding data around
-    pad = 10/np.sqrt(n)
-    m = int(pad*n)
-    Y = rand(m,2)
-    Y[:,0] = Y[:,0]*pad - pad
-    Z = np.vstack((X,Y))
-    Y = rand(m,2)
-    Y[:,0] = Y[:,0]*pad + 1
-    Z = np.vstack((Z,Y))
-    Y = rand(m,2)
-    Y[:,1] = Y[:,1]*pad - pad
-    Z = np.vstack((Z,Y))
-    Y = rand(m,2)
-    Y[:,1] = Y[:,1]*pad + 1
-    Z = np.vstack((Z,Y))
+    # Add padding data around
+    pad = 10 / np.sqrt(n)
+    m = int(pad * n)
+    Y = rand(m, 2)
+    Y[:, 0] = Y[:, 0] * pad - pad
+    Z = np.vstack((X, Y))
+    Y = rand(m, 2)
+    Y[:, 0] = Y[:, 0] * pad + 1
+    Z = np.vstack((Z, Y))
+    Y = rand(m, 2)
+    Y[:, 1] = Y[:, 1] * pad - pad
+    Z = np.vstack((Z, Y))
+    Y = rand(m, 2)
+    Y[:, 1] = Y[:, 1] * pad + 1
+    Z = np.vstack((Z, Y))
 
-    #Delaunay triangulation
+    # Delaunay triangulation
     T = spatial.Delaunay(Z);
     Tri = T.simplices
-    J = np.sum(Tri >= n,axis=1)==0;
-    Tri = Tri[J,:]
+    J = np.sum(Tri >= n, axis=1) == 0;
+    Tri = Tri[J, :]
 
     return Tri
 
-def plot(X,u):
+
+def plot(X, u):
     Tri = mesh(X)
 
     import mayavi.mlab as mlab
-    mlab.triangular_mesh(X[:,0],X[:,1],u,Tri)
-    mlab.view(azimuth=-45,elevation=60)
+    mlab.triangular_mesh(X[:, 0], X[:, 1], u, Tri)
+    mlab.view(azimuth=-45, elevation=60)
 
-#Laplace learning
-#Zhu, Xiaojin, Zoubin Ghahramani, and John D. Lafferty. "Semi-supervised learning using gaussian fields and harmonic functions." Proceedings of the 20th International conference on Machine learning (ICML-03). 2003.
-def laplace_solve(W,I,g,norm="none"):
-    L = graph_laplacian(W,norm=norm)
-    return constrained_solve(L,I,g)
 
-#Shift trick
-#W = Weight matrix
-#I = indices of labels
-#g = +1/-1 values of labels
-def shift_solve(W,I,g):
-    
-    #Laplace learning
-    u = laplace_solve(W,I,g)
+# Laplace learning
+# Zhu, Xiaojin, Zoubin Ghahramani, and John D. Lafferty. "Semi-supervised learning using gaussian fields and harmonic functions." Proceedings of the 20th International conference on Machine learning (ICML-03). 2003.
+def laplace_solve(W, I, g, norm="none"):
+    L = graph_laplacian(W, norm=norm)
+    return constrained_solve(L, I, g)
 
-    #Shift solution
+
+# Shift trick
+# W = Weight matrix
+# I = indices of labels
+# g = +1/-1 values of labels
+def shift_solve(W, I, g):
+    # Laplace learning
+    u = laplace_solve(W, I, g)
+
+    # Shift solution
     s = degrees(W)
-    c = np.sum(s[I]*g)/sum(s[I])
-    u = u - c 
-    
+    c = np.sum(s[I] * g) / sum(s[I])
+    u = u - c
+
     u = u - np.mean(u)
 
     return u
 
 
-#Shift trick by mean
-#W = Weight matrix
-#I = indices of labels
-#g = +1/-1 values of labels
-def meanshift_solve(W,I,g):
-    
-    #Laplace learning
-    u = laplace_solve(W,I,g)
+# Shift trick by mean
+# W = Weight matrix
+# I = indices of labels
+# g = +1/-1 values of labels
+def meanshift_solve(W, I, g):
+    # Laplace learning
+    u = laplace_solve(W, I, g)
 
-    #Center solution
+    # Center solution
     u = u - np.mean(u)
 
     return u
 
-#Reweights the weight matrix for WNLL
-def wnll(W,I):
 
+# Reweights the weight matrix for WNLL
+def wnll(W, I):
     n = W.shape[0]
     m = len(I)
 
     a = np.ones((n,))
-    a[I] = n/m
-    
-    D = sparse.spdiags(a,0,n,n).tocsr()
-    W = D*W + W*D
+    a[I] = n / m
+
+    D = sparse.spdiags(a, 0, n, n).tocsr()
+    W = D * W + W * D
 
     return W
 
 
-#Weighted nonlocal Laplacian
-#Shi, Zuoqiang, Stanley Osher, and Wei Zhu. "Weighted nonlocal laplacian on interpolation from sparse data." Journal of Scientific Computing 73.2-3 (2017): 1164-1177.
-def wnll_solve(W,I,g):
-
+# Weighted nonlocal Laplacian
+# Shi, Zuoqiang, Stanley Osher, and Wei Zhu. "Weighted nonlocal laplacian on interpolation from sparse data." Journal of Scientific Computing 73.2-3 (2017): 1164-1177.
+def wnll_solve(W, I, g):
     n = W.shape[0]
-    W = wnll(W,I)
-    L = graph_laplacian(W,norm="none")
-    return constrained_solve(L,I,g)
+    W = wnll(W, I)
+    L = graph_laplacian(W, norm="none")
+    return constrained_solve(L, I, g)
 
-#Properly weighted Laplacian
-#Calder, Jeff, and Dejan Slepcev. "Properly-weighted graph Laplacian for semi-supervised learning." arXiv preprint arXiv:1810.04351 (2018).
-def properlyweighted_solve(W,I,g,X,alpha,zeta,r):
 
+# Properly weighted Laplacian
+# Calder, Jeff, and Dejan Slepcev. "Properly-weighted graph Laplacian for semi-supervised learning." arXiv preprint arXiv:1810.04351 (2018).
+def properlyweighted_solve(W, I, g, X, alpha, zeta, r):
     n = W.shape[0]
-    rzeta = r/(zeta-1)**(1/alpha)
+    rzeta = r / (zeta - 1) ** (1 / alpha)
 
-    Xtree = spatial.cKDTree(X[I,:])
+    Xtree = spatial.cKDTree(X[I, :])
     D, J = Xtree.query(X)
     D[D < rzeta] = rzeta
-    gamma = 1 + (r/D)**alpha
+    gamma = 1 + (r / D) ** alpha
 
-    D = sparse.spdiags(gamma,0,n,n).tocsr()
+    D = sparse.spdiags(gamma, 0, n, n).tocsr()
 
-    L = graph_laplacian(D*W + W*D,norm="none")
+    L = graph_laplacian(D * W + W * D, norm="none")
 
-    return constrained_solve(L,I,g)
+    return constrained_solve(L, I, g)
 
-#Game theoretic p-Laplace learning
-#Rios, Mauricio Flores, Jeff Calder, and Gilad Lerman. "Algorithms for $\ell_p$-based semi-supervised learning on graphs." arXiv preprint arXiv:1901.05031 (2019).
-def plaplace_solve(W,I,g,p,sol_method="SemiImplicit",norm="none"):
 
-    #start_time = time.time()
+# Game theoretic p-Laplace learning
+# Rios, Mauricio Flores, Jeff Calder, and Gilad Lerman. "Algorithms for $\ell_p$-based semi-supervised learning on graphs." arXiv preprint arXiv:1901.05031 (2019).
+def plaplace_solve(W, I, g, p, sol_method="SemiImplicit", norm="none"):
+    # start_time = time.time()
 
     n = W.shape[0]
-    W = W/W.max()
-    
+    W = W / W.max()
+
     if p == float("inf"):
         alpha = 0
         delta = 1
     else:
-        alpha = 1/p
-        delta = 1-2/p
-    
+        alpha = 1 / p
+        delta = 1 - 2 / p
+
     dx = degrees(W)
-    theta = 1.2*(2*alpha + np.max(dx)*delta)
+    theta = 1.2 * (2 * alpha + np.max(dx) * delta)
 
     if p == float("inf"):
         beta = 1
-        gamma = 1/theta
+        gamma = 1 / theta
     else:
-        beta = (theta*p - 2)/(theta*p)
-        gamma = (p-2)/(theta*p-2)
+        beta = (theta * p - 2) / (theta * p)
+        gamma = (p - 2) / (theta * p - 2)
 
-    if norm=="normalized":
-        deg = dx[I]**(1/2) 
-        g = g/deg
+    if norm == "normalized":
+        deg = dx[I] ** (1 / 2)
+        g = g / deg
 
     L = graph_laplacian(W)
-    u = constrained_solve(L,I,g)
-    uu = np.max(g)*np.ones((n,))
-    ul = np.min(g)*np.ones((n,))
+    u = constrained_solve(L, I, g)
+    uu = np.max(g) * np.ones((n,))
+    ul = np.min(g) * np.ones((n,))
 
-    WI,WJ,WV = sparse.find(W)
+    WI, WJ, WV = sparse.find(W)
 
-    #Set labels
+    # Set labels
     u[I] = g
     uu[I] = g
     ul[I] = g
 
-    #Time step for gradient descent
-    dt = 0.9/(alpha + 2*delta)
+    # Time step for gradient descent
+    dt = 0.9 / (alpha + 2 * delta)
 
-    if sol_method=="GradientDescentCcode":
+    if sol_method == "GradientDescentCcode":
         try:
             import cmodules.cgraphpy as cgp
         except:
             print("cgraphpy cmodule not found. You may just need to compile it.")
             sys.exit()
 
-        #Type casting and memory blocking
-        uu = np.ascontiguousarray(uu,dtype=np.float64)
-        ul = np.ascontiguousarray(ul,dtype=np.float64)
-        WI = np.ascontiguousarray(WI,dtype=np.int32)
-        WJ = np.ascontiguousarray(WJ,dtype=np.int32)
-        WV = np.ascontiguousarray(WV,dtype=np.float64)
-        I = np.ascontiguousarray(I,dtype=np.int32)
-        g = np.ascontiguousarray(g,dtype=np.float64)
+        # Type casting and memory blocking
+        uu = np.ascontiguousarray(uu, dtype=np.float64)
+        ul = np.ascontiguousarray(ul, dtype=np.float64)
+        WI = np.ascontiguousarray(WI, dtype=np.int32)
+        WJ = np.ascontiguousarray(WJ, dtype=np.int32)
+        WV = np.ascontiguousarray(WV, dtype=np.float64)
+        I = np.ascontiguousarray(I, dtype=np.int32)
+        g = np.ascontiguousarray(g, dtype=np.float64)
 
-        cgp.lp_iterate(uu,ul,WI,WJ,WV,I,g,p,1e6,1e-1,0.0)
-        u = (uu+ul)/2
+        cgp.lp_iterate(uu, ul, WI, WJ, WV, I, g, p, 1e6, 1e-1, 0.0)
+        u = (uu + ul) / 2
 
-        #Check residual
-        L2uu = -L*uu
-        LIuu = graph_infinity_laplacian(W,uu,I=WI,J=WJ,V=WV)
-        resu = alpha*L2uu/dx + delta*LIuu
-        resu[I]=0
+        # Check residual
+        L2uu = -L * uu
+        LIuu = graph_infinity_laplacian(W, uu, I=WI, J=WJ, V=WV)
+        resu = alpha * L2uu / dx + delta * LIuu
+        resu[I] = 0
 
-        L2ul = -L*ul
-        LIul = graph_infinity_laplacian(W,ul,I=WI,J=WJ,V=WV)
-        resl = alpha*L2ul/dx + delta*LIul
-        resl[I]=0
+        L2ul = -L * ul
+        LIul = graph_infinity_laplacian(W, ul, I=WI, J=WJ, V=WV)
+        resl = alpha * L2ul / dx + delta * LIul
+        resl[I] = 0
 
-        #print('Upper residual = %f' % np.max(np.absolute(resu)))
-        #print('Lower residual = %f' % np.max(np.absolute(resl)))
+        # print('Upper residual = %f' % np.max(np.absolute(resu)))
+        # print('Lower residual = %f' % np.max(np.absolute(resl)))
 
     else:
         err = 1e6
         i = 0
         while err > 1e-1:
 
-            i+=1
-            
-            #Graph laplacians
-            L2u = -L*u
-            LIu = graph_infinity_laplacian(W,u,I=WI,J=WJ,V=WV)
+            i += 1
 
-            #Residual error
-            res = alpha*L2u/dx + delta*LIu
-            res[I]=0
-            #err = np.max(np.absolute(res))
-            #print("Residual error = "+str(err))
+            # Graph laplacians
+            L2u = -L * u
+            LIu = graph_infinity_laplacian(W, u, I=WI, J=WJ, V=WV)
 
-            #Update
-            if sol_method=="GradientDescent":
-                L2uu = -L*uu
-                LIuu = graph_infinity_laplacian(W,uu,I=WI,J=WJ,V=WV)
-                res = alpha*L2uu/dx + delta*LIuu
-                res[I]=0
-                uu = uu + dt*res        
+            # Residual error
+            res = alpha * L2u / dx + delta * LIu
+            res[I] = 0
+            # err = np.max(np.absolute(res))
+            # print("Residual error = "+str(err))
+
+            # Update
+            if sol_method == "GradientDescent":
+                L2uu = -L * uu
+                LIuu = graph_infinity_laplacian(W, uu, I=WI, J=WJ, V=WV)
+                res = alpha * L2uu / dx + delta * LIuu
+                res[I] = 0
+                uu = uu + dt * res
                 err = np.max(np.absolute(res))
-                #print("Upper residual = "+str(err))
+                # print("Upper residual = "+str(err))
 
-                L2ul = -L*ul
-                LIul = graph_infinity_laplacian(W,ul,I=WI,J=WJ,V=WV)
-                res = alpha*L2ul/dx + delta*LIul
-                res[I]=0
-                ul = ul + dt*res        
+                L2ul = -L * ul
+                LIul = graph_infinity_laplacian(W, ul, I=WI, J=WJ, V=WV)
+                res = alpha * L2ul / dx + delta * LIul
+                res[I] = 0
+                ul = ul + dt * res
                 err = np.max(np.absolute(res))
-                #print("Lower residual = "+str(err))
-                err1 = np.max(uu-ul)
-                err2 = np.min(uu-ul)
+                # print("Lower residual = "+str(err))
+                err1 = np.max(uu - ul)
+                err2 = np.min(uu - ul)
 
-                #print("Residual error = "+str(err1)+","+str(err2))
+                # print("Residual error = "+str(err1)+","+str(err2))
                 err = err1
 
-                u = (uu + ul)/2
-            elif sol_method=="SemiImplicit":
-                rhs = beta*(2*gamma*dx*LIu - L2u)
-                u = constrained_solve(L,I,g,f=rhs,x0=u,tol=err/100)
+                u = (uu + ul) / 2
+            elif sol_method == "SemiImplicit":
+                rhs = beta * (2 * gamma * dx * LIu - L2u)
+                u = constrained_solve(L, I, g, f=rhs, x0=u, tol=err / 100)
             else:
                 print("Invalid p-Laplace solution method.")
                 sys.exit()
-            
-    if norm=="normalized":
-        deg = dx**(1/2) 
-        u = u*deg
 
-    #print("--- %s seconds ---" % (time.time() - start_time))
+    if norm == "normalized":
+        deg = dx ** (1 / 2)
+        u = u * deg
+
+    # print("--- %s seconds ---" % (time.time() - start_time))
     return u
 
-#Gradient of function on graph
-#W = sparse weight matrix
-#u = function on graph
-def graph_gradient(W,u,I=None,J=None,V=None):
 
+# Gradient of function on graph
+# W = sparse weight matrix
+# u = function on graph
+def graph_gradient(W, u, I=None, J=None, V=None):
     n = W.shape[0]
     if I is None or J is None:
-        I,J,V = sparse.find(W)
+        I, J, V = sparse.find(W)
 
-    G = sparse.coo_matrix((V*(u[J]-u[I]), (I,J)),shape=(n,n)).tocsr()
+    G = sparse.coo_matrix((V * (u[J] - u[I]), (I, J)), shape=(n, n)).tocsr()
 
     return G
 
-#Divergence of vector field F (F should be skew-symmetric)
-#F = sparse matrix representing vector field
-def graph_divergence(F,W):
-    
+
+# Divergence of vector field F (F should be skew-symmetric)
+# F = sparse matrix representing vector field
+def graph_divergence(F, W):
     F = F.multiply(W)
-    return 2*np.squeeze(np.array(np.sum(F,axis=1)))
+    return 2 * np.squeeze(np.array(np.sum(F, axis=1)))
 
 
-#Random-walk SSL 
-#Zhou, Dengyong, et al. "Learning with local and global consistency." Advances in neural information processing systems. 2004.
-def randomwalk_solve(W,I,g,epsilon):
-    
+# Random-walk SSL
+# Zhou, Dengyong, et al. "Learning with local and global consistency." Advances in neural information processing systems. 2004.
+def randomwalk_solve(W, I, g, epsilon):
     n = W.shape[0]
 
-    #Zero diagonals
-    W = W - sparse.spdiags(W.diagonal(),0,n,n)
+    # Zero diagonals
+    W = W - sparse.spdiags(W.diagonal(), 0, n, n)
 
-    #Construct Laplacian matrix
-    Dinv2 = degree_matrix(W,p=-1/2)
-    L = sparse.identity(n) - (1-epsilon)*Dinv2*W*Dinv2;
+    # Construct Laplacian matrix
+    Dinv2 = degree_matrix(W, p=-1 / 2)
+    L = sparse.identity(n) - (1 - epsilon) * Dinv2 * W * Dinv2;
 
-    #Format right hand side
+    # Format right hand side
     b = np.zeros((n,))
     b[I] = g
 
-    return pcg_solve(L,b)
+    return pcg_solve(L, b)
 
-#Computes accuracy of labeling
-#m = number of labeled points used
-def accuracy(L,L_true,m):   
-    #Remove unlabeled nodes
-    I = L_true >=0
+
+# Computes accuracy of labeling
+# m = number of labeled points used
+def accuracy(L, L_true, m):
+    # Remove unlabeled nodes
+    I = L_true >= 0
     L = L[I]
     L_true = L_true[I]
 
-    #Compute accuracy
-    return 100*np.maximum(np.sum(L==L_true)-m,0)/(len(L)-m)
+    # Compute accuracy
+    return 100 * np.maximum(np.sum(L == L_true) - m, 0) / (len(L) - m)
 
-#Projects all columns of (kxn) matrix X onto k-simplex
+
+# Projects all columns of (kxn) matrix X onto k-simplex
 def ProjectToSimplex(X):
-   
     n = X.shape[1]
     k = X.shape[0]
 
-    Xs = -np.sort(-X,axis=0)  #Sort descending
-    A = np.tril(np.ones((k,k)))
-    Sum = A@Xs
-    Max = np.transpose((np.transpose(Sum) - 1)/(np.arange(k)+1))
-    Xs[:-1,:] = Xs[1:,:]
-    Xs[-1,:] = (Sum[k-1,:]-1)/k
-    I = np.argmax(Max >= Xs,axis=0)
-    X = np.maximum(X-Max[I,range(n)],0)
+    Xs = -np.sort(-X, axis=0)  # Sort descending
+    A = np.tril(np.ones((k, k)))
+    Sum = A @ Xs
+    Max = np.transpose((np.transpose(Sum) - 1) / (np.arange(k) + 1))
+    Xs[:-1, :] = Xs[1:, :]
+    Xs[-1, :] = (Sum[k - 1, :] - 1) / k
+    I = np.argmax(Max >= Xs, axis=0)
+    X = np.maximum(X - Max[I, range(n)], 0)
     return X
 
-#Takes list of labels and converts to vertices of simplex format
-def LabelsToVec(L):
 
+# Takes list of labels and converts to vertices of simplex format
+def LabelsToVec(L):
     n = L.shape[0]
 
     labels = np.unique(L)
     k = len(labels)
     for i in range(k):
-        L[L==labels[i]] = i
+        L[L == labels[i]] = i
 
     L = L.astype(int)
-    X = np.zeros((k,n))
-    X[L,range(n)] = 1
+    X = np.zeros((k, n))
+    X[L, range(n)] = 1
 
-    return X,labels
+    return X, labels
 
-#Projects all rows of (nxk) matrix X to closest vertex of the simplex
-#Assume X already lives in the simplex, e.g., is the output of ProjectToSimplex
+
+# Projects all rows of (nxk) matrix X to closest vertex of the simplex
+# Assume X already lives in the simplex, e.g., is the output of ProjectToSimplex
 def ClosestVertex(X):
-
     n = X.shape[1]
     k = X.shape[0]
-    L = np.argmax(X,axis=0)
-    X = np.zeros((k,n))
-    X[L,range(n)] = 1
+    L = np.argmax(X, axis=0)
+    X = np.zeros((k, n))
+    X[L, range(n)] = 1
     return X
 
-#Threshold with temperature to closest vertex
-def ClosestVertexTemp(X,T=0.01):
 
+# Threshold with temperature to closest vertex
+def ClosestVertexTemp(X, T=0.01):
     n = X.shape[1]
     k = X.shape[0]
-    
-    beta = 1/T
-    Y = np.exp(beta*X)
-    Ysum = np.sum(Y,axis=0)
-    Y = Y/Ysum
 
-    X[0,:] = Y[0,:]
-    for i in range(1,k):
-        X[i,:] = X[i-1,:] + Y[i,:]
+    beta = 1 / T
+    Y = np.exp(beta * X)
+    Ysum = np.sum(Y, axis=0)
+    Y = Y / Ysum
 
-    R = random.rand(n,1)
-    L = np.sum(R.flatten() > X,axis=0)
+    X[0, :] = Y[0, :]
+    for i in range(1, k):
+        X[i, :] = X[i - 1, :] + Y[i, :]
 
-    X = np.zeros((k,n))
-    X[L,range(n)] = 1
+    R = random.rand(n, 1)
+    L = np.sum(R.flatten() > X, axis=0)
+
+    X = np.zeros((k, n))
+    X[L, range(n)] = 1
     return X
 
-#Volume MBO, initialized with Poisson
-def poisson_volumeMBO(W,I,g,dataset,beta,T,volume_mult):
 
-    #Set diagonal entries to zero
-    W = diag_multiply(W,0)
+# Volume MBO, initialized with Poisson
+def poisson_volumeMBO(W, I, g, dataset, beta, T, volume_mult):
+    # Set diagonal entries to zero
+    W = diag_multiply(W, 0)
 
     try:
         import cmodules.cgraphpy as cgp
@@ -1276,41 +1270,39 @@ def poisson_volumeMBO(W,I,g,dataset,beta,T,volume_mult):
         print("cgraphpy cmodule not found. You may just need to compile it.")
         sys.exit()
 
-    #Solve Poisson problem and compute labels
-    u,_ = poisson(W,I,g)
-    max_locations = np.argmax(u,axis=0)
+    # Solve Poisson problem and compute labels
+    u, _ = poisson(W, I, g)
+    max_locations = np.argmax(u, axis=0)
     u = (np.unique(g))[max_locations]
 
     n = W.shape[0]
     k = len(np.unique(g))
-    WI,WJ,WV = sparse.find(W)
+    WI, WJ, WV = sparse.find(W)
 
-    #Class counts
-    ClassCounts = (n*beta).astype(int)
+    # Class counts
+    ClassCounts = (n * beta).astype(int)
 
-    #Type casting and memory blocking
-    u = np.ascontiguousarray(u,dtype=np.int32)
-    WI = np.ascontiguousarray(WI,dtype=np.int32)
-    WJ = np.ascontiguousarray(WJ,dtype=np.int32)
-    WV = np.ascontiguousarray(WV,dtype=np.float32)
-    I = np.ascontiguousarray(I,dtype=np.int32)
-    g = np.ascontiguousarray(g,dtype=np.int32)
-    ClassCounts = np.ascontiguousarray(ClassCounts,dtype=np.int32)
+    # Type casting and memory blocking
+    u = np.ascontiguousarray(u, dtype=np.int32)
+    WI = np.ascontiguousarray(WI, dtype=np.int32)
+    WJ = np.ascontiguousarray(WJ, dtype=np.int32)
+    WV = np.ascontiguousarray(WV, dtype=np.float32)
+    I = np.ascontiguousarray(I, dtype=np.int32)
+    g = np.ascontiguousarray(g, dtype=np.int32)
+    ClassCounts = np.ascontiguousarray(ClassCounts, dtype=np.int32)
 
-    cgp.volume_mbo(u,WI,WJ,WV,I,g,ClassCounts,k,0.0,T,volume_mult)
+    cgp.volume_mbo(u, WI, WJ, WV, I, g, ClassCounts, k, 0.0, T, volume_mult)
 
-    #Set given labels and convert to vector format
+    # Set given labels and convert to vector format
     u[I] = g
-    u,_ = LabelsToVec(u)
+    u, _ = LabelsToVec(u)
     return u
 
 
-
-#Volume MBO (Jacobs, et al.)
-def volumeMBO(W,I,g,dataset,beta,T,volume_mult):
-
-    #Set diagonal entries to zero
-    W = diag_multiply(W,0)
+# Volume MBO (Jacobs, et al.)
+def volumeMBO(W, I, g, dataset, beta, T, volume_mult):
+    # Set diagonal entries to zero
+    W = diag_multiply(W, 0)
 
     try:
         import cmodules.cgraphpy as cgp
@@ -1321,138 +1313,136 @@ def volumeMBO(W,I,g,dataset,beta,T,volume_mult):
     n = W.shape[0]
     k = len(np.unique(g))
     u = np.zeros((n,))
-    WI,WJ,WV = sparse.find(W)
+    WI, WJ, WV = sparse.find(W)
 
-    #Class counts
-    ClassCounts = (n*beta).astype(int)
+    # Class counts
+    ClassCounts = (n * beta).astype(int)
 
-    #Type casting and memory blocking
-    u = np.ascontiguousarray(u,dtype=np.int32)
-    WI = np.ascontiguousarray(WI,dtype=np.int32)
-    WJ = np.ascontiguousarray(WJ,dtype=np.int32)
-    WV = np.ascontiguousarray(WV,dtype=np.float32)
-    I = np.ascontiguousarray(I,dtype=np.int32)
-    g = np.ascontiguousarray(g,dtype=np.int32)
-    ClassCounts = np.ascontiguousarray(ClassCounts,dtype=np.int32)
+    # Type casting and memory blocking
+    u = np.ascontiguousarray(u, dtype=np.int32)
+    WI = np.ascontiguousarray(WI, dtype=np.int32)
+    WJ = np.ascontiguousarray(WJ, dtype=np.int32)
+    WV = np.ascontiguousarray(WV, dtype=np.float32)
+    I = np.ascontiguousarray(I, dtype=np.int32)
+    g = np.ascontiguousarray(g, dtype=np.int32)
+    ClassCounts = np.ascontiguousarray(ClassCounts, dtype=np.int32)
 
-    cgp.volume_mbo(u,WI,WJ,WV,I,g,ClassCounts,k,1.0,T,volume_mult)
+    cgp.volume_mbo(u, WI, WJ, WV, I, g, ClassCounts, k, 1.0, T, volume_mult)
 
-    #Set given labels and convert to vector format
+    # Set given labels and convert to vector format
     u[I] = g
-    u,_ = LabelsToVec(u)
+    u, _ = LabelsToVec(u)
     return u
 
 
-#Multiclass MBO
-#Garcia-Cardona, Cristina, et al. "Multiclass data segmentation using diffuse interface methods on graphs." IEEE transactions on pattern analysis and machine intelligence 36.8 (2014): 1600-1613.
-def multiclassMBO(W,I,g,eigvals,eigvecs,dataset,true_labels=None):
-
+# Multiclass MBO
+# Garcia-Cardona, Cristina, et al. "Multiclass data segmentation using diffuse interface methods on graphs." IEEE transactions on pattern analysis and machine intelligence 36.8 (2014): 1600-1613.
+def multiclassMBO(W, I, g, eigvals, eigvecs, dataset, true_labels=None):
     n = W.shape[0]
     k = len(np.unique(g))
 
     Ns = 6
-    if dataset=='MNIST' or dataset=='FashionMNIST' or dataset=='cifar':
+    if dataset == 'MNIST' or dataset == 'FashionMNIST' or dataset == 'cifar':
         dt = 0.15
         mu = 50
-    elif dataset=='WEBKB':
+    elif dataset == 'WEBKB':
         dt = 1
         mu = 4
     else:
         print('Dataset not supported by MBO...')
         sys.exit(2)
 
-    #Load eigenvalues and eigenvectors
+    # Load eigenvalues and eigenvectors
     X = eigvecs
     num_eig = len(eigvals)
-    
-    #Form matrices
-    V = np.diag(1/(1 + (dt/Ns)*eigvals)) 
-    Y = X@V
+
+    # Form matrices
+    V = np.diag(1 / (1 + (dt / Ns) * eigvals))
+    Y = X @ V
     Xt = np.transpose(X)
 
-    #Random initial labeling
-    u = random.rand(k,n)
+    # Random initial labeling
+    u = random.rand(k, n)
     u = ProjectToSimplex(u)
 
-    #Set initial known labels
-    J = np.zeros(n,)
-    K = np.ones(n,)*g[0]
+    # Set initial known labels
+    J = np.zeros(n, )
+    K = np.ones(n, ) * g[0]
     J[I] = 1
     K[I] = g
-    Kg,_ = LabelsToVec(K)
-    Kg = Kg*J
-    u = Kg + (1-J)*u
-    
-    #Maximum number of iterations
+    Kg, _ = LabelsToVec(K)
+    Kg = Kg * J
+    u = Kg + (1 - J) * u
+
+    # Maximum number of iterations
     T = 10
     for i in range(T):
         for s in range(Ns):
-            Z = (u - (dt/Ns)*mu*J*(u - Kg))@Y
-            u = Z@Xt
-            
-        #Projection step
+            Z = (u - (dt / Ns) * mu * J * (u - Kg)) @ Y
+            u = Z @ Xt
+
+        # Projection step
         u = ProjectToSimplex(u)
         u = ClosestVertex(u)
 
-        #Compute accuracy if all labels are provided
+        # Compute accuracy if all labels are provided
         if true_labels is not None:
-            max_locations = np.argmax(u,axis=0)
+            max_locations = np.argmax(u, axis=0)
             labels = (np.unique(g))[max_locations]
             labels[I] = g
-            acc = accuracy(labels,true_labels,len(I))
-            print('Accuracy = %.2f'%acc)
+            acc = accuracy(labels, true_labels, len(I))
+            print('Accuracy = %.2f' % acc)
 
     return u
 
 
-#Poisson MBO
-def poissonMBO(W,I,g,dataset,beta,true_labels=None,temp=0,use_cuda=False,Ns=40,mu=1,T=50):
-
+# Poisson MBO
+def poissonMBO(W, I, g, dataset, beta, true_labels=None, temp=0, use_cuda=False, Ns=40, mu=1, T=50):
     n = W.shape[0]
     unique_labels = np.unique(g)
     k = len(unique_labels)
 
     num_labels = np.zeros((k,))
     for i in range(k):
-        num_labels[i] = np.sum(g==unique_labels[i])
+        num_labels[i] = np.sum(g == unique_labels[i])
 
-    W = diag_multiply(W,0)
-    if dataset=='WEBKB':
+    W = diag_multiply(W, 0)
+    if dataset == 'WEBKB':
         mu = 1000
         Ns = 8
-    
-    #Labels to vector and correct position
-    J = np.zeros(n,)
-    K = np.ones(n,)*g[0]
+
+    # Labels to vector and correct position
+    J = np.zeros(n, )
+    K = np.ones(n, ) * g[0]
     J[I] = 1
     K[I] = g
-    Kg,_ = LabelsToVec(K)
-    Kg = Kg*J
-    
-    #Poisson source term
-    c = np.sum(Kg,axis=1)/len(I)
+    Kg, _ = LabelsToVec(K)
+    Kg = Kg * J
+
+    # Poisson source term
+    c = np.sum(Kg, axis=1) / len(I)
     b = np.transpose(Kg)
-    b[I,:] = b[I,:]-c
+    b[I, :] = b[I, :] - c
     b = np.transpose(b)
 
-    L = graph_laplacian(W,norm='none')
+    L = graph_laplacian(W, norm='none')
 
-    #Initialize u via Poisson learning
-    #u = np.zeros((k,n))
-    #for j in range(k):
+    # Initialize u via Poisson learning
+    # u = np.zeros((k,n))
+    # for j in range(k):
     #    u[j,:] = pcg_solve(L,b[j,:])
-    #u = mu*u
-    #u = np.transpose(np.transpose(u) - np.mean(u,axis=1))
-    u,mix_time = poisson(W,I,g,use_cuda=use_cuda,beta=beta)
-    #Ns = int(mix_time/4)
+    # u = mu*u
+    # u = np.transpose(np.transpose(u) - np.mean(u,axis=1))
+    u, mix_time = poisson(W, I, g, use_cuda=use_cuda, beta=beta)
+    # Ns = int(mix_time/4)
     u = ProjectToSimplex(u)
     u = ClosestVertex(u)
 
-    #Time step for stability
-    dt = 1/np.max(degrees(W))
+    # Time step for stability
+    dt = 1 / np.max(degrees(W))
 
-    P = sparse.identity(n) - dt*L
-    Db = mu*dt*b
+    P = sparse.identity(n) - dt * L
+    Db = mu * dt * b
 
     if use_cuda:
         Pt = torch_sparse(P).cuda()
@@ -1462,38 +1452,38 @@ def poissonMBO(W,I,g,dataset,beta,true_labels=None,temp=0,use_cuda=False,Ns=40,m
 
         if use_cuda:
 
-            #Put on GPU and run heat equation
+            # Put on GPU and run heat equation
             ut = torch.from_numpy(np.transpose(u)).float().cuda()
             for s in range(Ns):
-                #u = u*P + Db
-                ut = torch.sparse.addmm(Dbt,Pt,ut)
+                # u = u*P + Db
+                ut = torch.sparse.addmm(Dbt, Pt, ut)
 
-            #Put back on CPU
+            # Put back on CPU
             u = np.transpose(ut.cpu().numpy())
-         
-        else: #Use CPU 
-            for s in range(Ns):
-                #u = u + dt*(mu*b - u*L)
-                u = u*P + Db
 
-        #Projection step
-        #u = np.diag(beta/num_labels)@u
+        else:  # Use CPU
+            for s in range(Ns):
+                # u = u + dt*(mu*b - u*L)
+                u = u * P + Db
+
+        # Projection step
+        # u = np.diag(beta/num_labels)@u
         u = ProjectToSimplex(u)
         u = ClosestVertex(u)
-        u = np.transpose(np.transpose(u) - np.mean(u,axis=1) + beta)
+        u = np.transpose(np.transpose(u) - np.mean(u, axis=1) + beta)
 
-        #Compute accuracy if all labels are provided
+        # Compute accuracy if all labels are provided
         if true_labels is not None:
-            max_locations = np.argmax(u,axis=0)
+            max_locations = np.argmax(u, axis=0)
             labels = (np.unique(g))[max_locations]
             labels[I] = g
-            acc = accuracy(labels,true_labels,len(I))
-            print('Accuracy = %.2f'%acc)
-    
+            acc = accuracy(labels, true_labels, len(I))
+            print('Accuracy = %.2f' % acc)
+
     return u
 
-def torch_sparse(A):
 
+def torch_sparse(A):
     A = A.tocoo()
     values = A.data
     indices = np.vstack((A.row, A.col))
@@ -1504,188 +1494,187 @@ def torch_sparse(A):
 
     return torch.sparse.FloatTensor(i, v, torch.Size(shape))
 
-#Sparse Label Propagation
-def SparseLabelPropagation(W,I,g,true_labels=None):
 
+# Sparse Label Propagation
+def SparseLabelPropagation(W, I, g, true_labels=None):
     n = W.shape[0]
     k = len(np.unique(g))
 
-    WI,WJ,WV = sparse.find(W)
-    B = sparse.coo_matrix((np.ones(len(WV),),(WI,WJ)),shape=(n,n)).tocsr() #Ones in all entries
+    WI, WJ, WV = sparse.find(W)
+    B = sparse.coo_matrix((np.ones(len(WV), ), (WI, WJ)), shape=(n, n)).tocsr()  # Ones in all entries
 
-    #Construct matrix 1/2W and 1/deg
-    lam = 2*W - (1-1e-10)*B
+    # Construct matrix 1/2W and 1/deg
+    lam = 2 * W - (1 - 1e-10) * B
     lam = -lam.log1p()
     lam = lam.expm1() + B
-    Id = sparse.identity(n) 
-    gamma = degree_matrix(W+1e-10*Id,p=-1)
+    Id = sparse.identity(n)
+    gamma = degree_matrix(W + 1e-10 * Id, p=-1)
 
-    #Random initial labeling
-    #u = random.rand(k,n)
-    u = np.zeros((k,n))
+    # Random initial labeling
+    # u = random.rand(k,n)
+    u = np.zeros((k, n))
 
-    #Set initial known labels
-    J = np.zeros(n,)
-    K = np.ones(n,)*g[0]
+    # Set initial known labels
+    J = np.zeros(n, )
+    K = np.ones(n, ) * g[0]
     J[I] = 1
     K[I] = g
-    Kg,_ = LabelsToVec(K)
-    Kg = Kg*J
+    Kg, _ = LabelsToVec(K)
+    Kg = Kg * J
 
-    #Initialization
+    # Initialization
     Y = list()
     for j in range(k):
-        Gu = graph_gradient(W,u[j,:],I=WI,J=WJ,V=WV)
+        Gu = graph_gradient(W, u[j, :], I=WI, J=WJ, V=WV)
         Y.append(Gu)
 
-    #Main loop for sparse label propagation
+    # Main loop for sparse label propagation
     T = 100
     for i in range(T):
 
         u_prev = np.copy(u)
-        #Compute div
+        # Compute div
         for j in range(k):
-            div = graph_divergence(Y[j],W)
-            u[j,:] = u_prev[j,:] - gamma*div
-            u[j,I] = Kg[j,I]  #Set labels
-            u_tilde = 2*u[j,:] - u_prev[j,:]
+            div = graph_divergence(Y[j], W)
+            u[j, :] = u_prev[j, :] - gamma * div
+            u[j, I] = Kg[j, I]  # Set labels
+            u_tilde = 2 * u[j, :] - u_prev[j, :]
 
-            Gu = -graph_gradient(W,u_tilde,I=WI,J=WJ,V=WV)
+            Gu = -graph_gradient(W, u_tilde, I=WI, J=WJ, V=WV)
             Y[j] = Y[j] + Gu.multiply(lam)
-            ind1 = B.multiply(abs(Y[j])>1)
+            ind1 = B.multiply(abs(Y[j]) > 1)
             ind2 = B - ind1
             Y[j] = ind1.multiply(Y[j].sign()) + ind2.multiply(Y[j])
 
-        #Compute accuracy if all labels are provided
+        # Compute accuracy if all labels are provided
         if true_labels is not None:
-            max_locations = np.argmax(u,axis=0)
+            max_locations = np.argmax(u, axis=0)
             labels = (np.unique(g))[max_locations]
             labels[I] = g
-            acc = accuracy(labels,true_labels,len(I))
-            print('Accuracy = %.2f'%acc)
+            acc = accuracy(labels, true_labels, len(I))
+            print('Accuracy = %.2f' % acc)
 
     return u
 
 
-#Dynamic Label Propagation
-def DynamicLabelPropagation(W,I,g,alpha=0.05,lam=0.1,true_labels=None):
-
+# Dynamic Label Propagation
+def DynamicLabelPropagation(W, I, g, alpha=0.05, lam=0.1, true_labels=None):
     n = W.shape[0]
     k = len(np.unique(g))
 
-    W = diag_multiply(W,0)
-    
-    #Labels to vector and correct position
-    J = np.zeros(n,)
-    K = np.ones(n,)*g[0]
-    J[I] = 1
-    K[I] = g
-    u,_ = LabelsToVec(K)
-    u = u*J
+    W = diag_multiply(W, 0)
 
-    #Set initial known labels
-    J = np.zeros(n,)
-    K = np.ones(n,)*g[0]
+    # Labels to vector and correct position
+    J = np.zeros(n, )
+    K = np.ones(n, ) * g[0]
     J[I] = 1
     K[I] = g
-    Kg,_ = LabelsToVec(K)
-    Kg = np.transpose(Kg*J)
+    u, _ = LabelsToVec(K)
+    u = u * J
+
+    # Set initial known labels
+    J = np.zeros(n, )
+    K = np.ones(n, ) * g[0]
+    J[I] = 1
+    K[I] = g
+    Kg, _ = LabelsToVec(K)
+    Kg = np.transpose(Kg * J)
     u = np.copy(Kg)
-  
+
     if n > 5000:
         print("Cannot use Dynamic Label Propagation on large datasets.")
     else:
-        #Setup matrices
-        Id = sparse.identity(n) 
-        D = degree_matrix(W,p=-1)
-        P = D*W
+        # Setup matrices
+        Id = sparse.identity(n)
+        D = degree_matrix(W, p=-1)
+        P = D * W
         P = np.array(P.todense())
         Pt = np.copy(P)
 
         T = 2
         for i in range(T):
-            v = P@u
-            u = Pt@u
-            u[I,:] = Kg[I,:]
-            Pt = P@Pt@np.transpose(P) + alpha*v@np.transpose(v) + lam*Id
+            v = P @ u
+            u = Pt @ u
+            u[I, :] = Kg[I, :]
+            Pt = P @ Pt @ np.transpose(P) + alpha * v @ np.transpose(v) + lam * Id
 
-            #Compute accuracy if all labels are provided
+            # Compute accuracy if all labels are provided
             if true_labels is not None:
                 u = np.array(u)
-                max_locations = np.argmax(u,axis=1)
+                max_locations = np.argmax(u, axis=1)
                 labels = (np.unique(g))[max_locations]
                 labels[I] = g
-                acc = accuracy(labels,true_labels,len(I))
-                print('i:%d'%i+',Accuracy = %.2f'%acc)
-        
+                acc = accuracy(labels, true_labels, len(I))
+                print('i:%d' % i + ',Accuracy = %.2f' % acc)
 
         u = np.transpose(np.array(u))
 
     return u
 
-#Centered and Iterated Centered Kernel of Mai/Coulliet 2018 
-def CenteredKernel(W,I,g,true_labels=None):
 
+# Centered and Iterated Centered Kernel of Mai/Coulliet 2018
+def CenteredKernel(W, I, g, true_labels=None):
     n = W.shape[0]
     k = len(np.unique(g))
 
-    W = diag_multiply(W,0)
+    W = diag_multiply(W, 0)
 
-    #Labels to vector and correct position
-    J = np.zeros(n,)
-    K = np.ones(n,)*g[0]
+    # Labels to vector and correct position
+    J = np.zeros(n, )
+    K = np.ones(n, ) * g[0]
     J[I] = 1
     K[I] = g
-    Kg,_ = LabelsToVec(K)
-    Kg = np.transpose(Kg*J)
-    
-    #Center labels
-    c = np.sum(Kg,axis=0)/len(I)
-    Kg[I,:] = Kg[I,:]-c
+    Kg, _ = LabelsToVec(K)
+    Kg = np.transpose(Kg * J)
+
+    # Center labels
+    c = np.sum(Kg, axis=0) / len(I)
+    Kg[I, :] = Kg[I, :] - c
 
     u = np.copy(Kg)
-    v = np.ones((n,1))
-    vt = np.ones((1,n))
+    v = np.ones((n, 1))
+    vt = np.ones((1, n))
 
-    e = np.random.rand(n,1)
+    e = np.random.rand(n, 1)
     for i in range(100):
-        y = W*(e -  (1/n)*v@(vt@e))
-        w = y - (1/n)*v@(vt@y) #=Ae
-        l = abs(np.transpose(e)@w/(np.transpose(e)@e))
-        e = w/np.linalg.norm(w)
+        y = W * (e - (1 / n) * v @ (vt @ e))
+        w = y - (1 / n) * v @ (vt @ y)  # =Ae
+        l = abs(np.transpose(e) @ w / (np.transpose(e) @ e))
+        e = w / np.linalg.norm(w)
 
-    #Number of iterations
-    #alpha = 5*l/4
-    alpha = 105*l/100
+    # Number of iterations
+    # alpha = 5*l/4
+    alpha = 105 * l / 100
     T = 1000
     err = 1
     while err > 1e-10:
-        y = W*(u -  (1/n)*v@(vt@u))
-        w = (1/alpha)*(y - (1/n)*v@(vt@y)) - u #Laplacian
-        w[I,:] = 0
+        y = W * (u - (1 / n) * v @ (vt @ u))
+        w = (1 / alpha) * (y - (1 / n) * v @ (vt @ y)) - u  # Laplacian
+        w[I, :] = 0
         err = np.max(np.absolute(w))
         u = u + w
 
-        #Compute accuracy if all labels are provided
+        # Compute accuracy if all labels are provided
         if true_labels is not None:
-            max_locations = np.argmax(u,axis=1)
+            max_locations = np.argmax(u, axis=1)
             labels = (np.unique(g))[max_locations]
             labels[I] = g
-            acc = accuracy(labels,true_labels,len(I))
-            print('Accuracy = %.2f'%acc)
-    
+            acc = accuracy(labels, true_labels, len(I))
+            print('Accuracy = %.2f' % acc)
+
     return np.transpose(u)
 
 
-def vec_acc(u,I,g,true_labels):
-
-    max_locations = np.argmax(u,axis=0)
+def vec_acc(u, I, g, true_labels):
+    max_locations = np.argmax(u, axis=0)
     labels = (np.unique(g))[max_locations]
     labels[I] = g
-    acc = accuracy(labels,true_labels,len(I))
+    acc = accuracy(labels, true_labels, len(I))
 
     return acc
-#def volume_label_projection(u,beta,s=None):
+
+
+# def volume_label_projection(u,beta,s=None):
 #
 #    k = u.shape[0]
 #    n = u.shape[1]
@@ -1731,67 +1720,66 @@ def vec_acc(u,I,g,true_labels):
 #    
 #    return ClosestVertex(np.diag(s)@u),s
 
-def volume_label_projection(u,beta,s=None,dt=None):
-
+def volume_label_projection(u, beta, s=None, dt=None):
     k = u.shape[0]
     n = u.shape[1]
     if s is None:
         s = np.ones((k,))
     if dt is None:
         dt = 10
-    #print(np.around(100*beta,decimals=1))
-    #print(np.around(100*np.sum(ClosestVertex(np.diag(s)@u),axis=1)/n,decimals=1))
+    # print(np.around(100*beta,decimals=1))
+    # print(np.around(100*np.sum(ClosestVertex(np.diag(s)@u),axis=1)/n,decimals=1))
     for i in range(100):
-        class_size = np.sum(ClosestVertex(np.diag(s)@u),axis=1)/n
-        grad = beta - class_size 
-        #print(np.around(100*class_size,decimals=1))
-        #err = np.max(np.absolute(grad))
+        class_size = np.sum(ClosestVertex(np.diag(s) @ u), axis=1) / n
+        grad = beta - class_size
+        # print(np.around(100*class_size,decimals=1))
+        # err = np.max(np.absolute(grad))
 
-        #if err == 0:
+        # if err == 0:
         #    break
-        s = np.clip(s + dt*grad,0.5,2)
-    
-    #print(np.around(100*beta,decimals=1))
-    #print(np.around(100*np.sum(ClosestVertex(np.diag(s)@u),axis=1)/n,decimals=1))
-    #print(np.around(100*beta - 100*np.sum(ClosestVertex(np.diag(s)@u),axis=1)/n,decimals=4))
-    return ClosestVertex(np.diag(s)@u),s
+        s = np.clip(s + dt * grad, 0.5, 2)
 
-#Poisson MBO with volume constraints
-def poissonMBO_volume(W,I,g,dataset,beta,true_labels=None,temp=0,use_cuda=False,Ns=40,mu=1,T=20):
+    # print(np.around(100*beta,decimals=1))
+    # print(np.around(100*np.sum(ClosestVertex(np.diag(s)@u),axis=1)/n,decimals=1))
+    # print(np.around(100*beta - 100*np.sum(ClosestVertex(np.diag(s)@u),axis=1)/n,decimals=4))
+    return ClosestVertex(np.diag(s) @ u), s
 
+
+# Poisson MBO with volume constraints
+def poissonMBO_volume(W, I, g, dataset, beta, true_labels=None, temp=0, use_cuda=False, Ns=40, mu=1, T=20):
     n = W.shape[0]
     k = len(np.unique(g))
 
-    W = diag_multiply(W,0)
-    if dataset=='WEBKB':
+    W = diag_multiply(W, 0)
+    if dataset == 'WEBKB':
         mu = 1000
         Ns = 8
-    
-    #Labels to vector and correct position
-    J = np.zeros(n,)
-    K = np.ones(n,)*g[0]
+
+    # Labels to vector and correct position
+    J = np.zeros(n, )
+    K = np.ones(n, ) * g[0]
     J[I] = 1
     K[I] = g
-    Kg,_ = LabelsToVec(K)
-    Kg = Kg*J
-    
-    #Poisson source term
-    c = np.sum(Kg,axis=1)/len(I)
+    Kg, _ = LabelsToVec(K)
+    Kg = Kg * J
+
+    # Poisson source term
+    c = np.sum(Kg, axis=1) / len(I)
     b = np.transpose(Kg)
-    b[I,:] = b[I,:]-c
+    b[I, :] = b[I, :] - c
     b = np.transpose(b)
 
-    L = graph_laplacian(W,norm='none')
+    L = graph_laplacian(W, norm='none')
 
-    #Initialize u via Poisson learning
-    u,_ = poisson(W,I,g,true_labels=true_labels,use_cuda=use_cuda, beta=beta)
-    u = mu*u
+    # Initialize u via Poisson learning
+    u, _ = poisson(W, I, g, true_labels=true_labels, use_cuda=use_cuda, beta=beta)
+    u = mu * u
 
-    #Time step for stability
-    dt = 1/np.max(degrees(W))
+    # Time step for stability
+    dt = 1 / np.max(degrees(W))
 
-    P = sparse.identity(n) - dt*L
-    Db = mu*dt*b
+    P = sparse.identity(n) - dt * L
+    Db = mu * dt * b
 
     if use_cuda:
         Pt = torch_sparse(P).cuda()
@@ -1799,592 +1787,579 @@ def poissonMBO_volume(W,I,g,dataset,beta,true_labels=None,temp=0,use_cuda=False,
 
     for i in range(T):
 
-        #Heat equation step
+        # Heat equation step
         if use_cuda:
 
-            #Put on GPU and run heat equation
+            # Put on GPU and run heat equation
             ut = torch.from_numpy(np.transpose(u)).float().cuda()
             for j in range(Ns):
-                ut = torch.sparse.addmm(Dbt,Pt,ut)
+                ut = torch.sparse.addmm(Dbt, Pt, ut)
 
-            #Put back on CPU
+            # Put back on CPU
             u = np.transpose(ut.cpu().numpy())
-         
-        else: #Use CPU 
+
+        else:  # Use CPU
             for j in range(Ns):
-                u = u*P + Db
+                u = u * P + Db
 
-        #Projection step
-        u,s = volume_label_projection(u,beta)
+        # Projection step
+        u, s = volume_label_projection(u, beta)
 
-        #Compute accuracy if all labels are provided
+        # Compute accuracy if all labels are provided
         if true_labels is not None:
-            max_locations = np.argmax(u,axis=0)
+            max_locations = np.argmax(u, axis=0)
             labels = (np.unique(g))[max_locations]
             labels[I] = g
-            acc = accuracy(labels,true_labels,len(I))
-            print('Accuracy = %.2f'%acc)
-    
+            acc = accuracy(labels, true_labels, len(I))
+            print('Accuracy = %.2f' % acc)
+
     return u
 
 
-#Poisson Volume
-def PoissonVolume(W,I,g,true_labels=None,use_cuda=False,training_balance=True,beta=None,min_iter=50):
+# Poisson Volume
+def PoissonVolume(W, I, g, true_labels=None, use_cuda=False, training_balance=True, beta=None, min_iter=50):
+    # Run Poisson learning
+    u, _ = poisson(W, I, g, true_labels=true_labels, use_cuda=use_cuda, training_balance=training_balance, beta=beta)
+
+    # Volume constraints
+    _, s = volume_label_projection(u, beta)
+    return np.diag(s) @ u
 
 
-    #Run Poisson learning
-    u,_ = poisson(W,I,g,true_labels=true_labels,use_cuda=use_cuda, training_balance=training_balance,beta = beta)
-
-    #Volume constraints
-    _,s = volume_label_projection(u,beta)
-    return np.diag(s)@u
-
-#Poisson learning
-def poisson(W,I,g,true_labels=None,use_cuda=False,training_balance=True,beta=None,min_iter=50):
-
+# Poisson learning
+def poisson(W, I, g, true_labels=None, use_cuda=False, training_balance=True, beta=None, min_iter=50):
     n = W.shape[0]
     unique_labels = np.unique(g)
     k = len(unique_labels)
-    
-    #Zero out diagonal for faster convergence
-    W = diag_multiply(W,0)
 
-    #Labels to vector and correct position
-    J = np.zeros(n,)
-    K = np.ones(n,)*g[0]
+    # Zero out diagonal for faster convergence
+    W = diag_multiply(W, 0)
+
+    # Labels to vector and correct position
+    J = np.zeros(n, )
+    K = np.ones(n, ) * g[0]
     J[I] = 1
     K[I] = g
-    Kg,_ = LabelsToVec(K)
-    Kg = Kg*J
+    Kg, _ = LabelsToVec(K)
+    Kg = Kg * J
 
-    #Poisson source term
-    c = np.sum(Kg,axis=1)/len(I)
+    # Poisson source term
+    c = np.sum(Kg, axis=1) / len(I)
     b = np.transpose(Kg)
-    b[I,:] = b[I,:]-c
+    b[I, :] = b[I, :] - c
 
-    #Setup matrices
-    L = graph_laplacian(W,norm='none')
-    D = degree_matrix(W + 1e-10*sparse.identity(n),p=-1)
-    P = sparse.identity(n) - D*L
-    Db = D*b
+    # Setup matrices
+    L = graph_laplacian(W, norm='none')
+    D = degree_matrix(W + 1e-10 * sparse.identity(n), p=-1)
+    P = sparse.identity(n) - D * L
+    Db = D * b
 
-    v = np.max(Kg,axis=0)
-    v = v/np.sum(v)
-    vinf = degrees(W)/np.sum(degrees(W))
-    RW = W*D
-    u = np.zeros((n,k))
+    v = np.max(Kg, axis=0)
+    v = v / np.sum(v)
+    vinf = degrees(W) / np.sum(degrees(W))
+    RW = W * D
+    u = np.zeros((n, k))
 
-    #Number of iterations
+    # Number of iterations
     T = 0
     if use_cuda:
-        
+
         Pt = torch_sparse(P).cuda()
         ut = torch.from_numpy(u).float().cuda()
         Dbt = torch.from_numpy(Db).float().cuda()
 
-        #start_time = time.time()
-        while T < min_iter or np.max(np.absolute(v-vinf)) > 1/n:
-            ut = torch.sparse.addmm(Dbt,Pt,ut)
-            v = RW*v
+        # start_time = time.time()
+        while T < min_iter or np.max(np.absolute(v - vinf)) > 1 / n:
+            ut = torch.sparse.addmm(Dbt, Pt, ut)
+            v = RW * v
             T = T + 1
-        #print("--- %s seconds ---" % (time.time() - start_time))
+        # print("--- %s seconds ---" % (time.time() - start_time))
 
-        #Transfer to CPU and convert to numpy
+        # Transfer to CPU and convert to numpy
         u = ut.cpu().numpy()
 
-    else: #Use CPU
+    else:  # Use CPU
 
-        #start_time = time.time()
-        while T < min_iter or np.max(np.absolute(v-vinf)) > 1/n:
-            u = Db + P*u
-            v = RW*v
+        # start_time = time.time()
+        while T < min_iter or np.max(np.absolute(v - vinf)) > 1 / n:
+            u = Db + P * u
+            v = RW * v
             T = T + 1
 
-            #Compute accuracy if all labels are provided
+            # Compute accuracy if all labels are provided
             if true_labels is not None:
-                max_locations = np.argmax(u,axis=1)
+                max_locations = np.argmax(u, axis=1)
                 labels = (np.unique(g))[max_locations]
                 labels[I] = g
-                acc = accuracy(labels,true_labels,len(I))
-                print('%d,Accuracy = %.2f'%(T,acc))
-        
-        #print("--- %s seconds ---" % (time.time() - start_time))
+                acc = accuracy(labels, true_labels, len(I))
+                print('%d,Accuracy = %.2f' % (T, acc))
 
-    #Balancing for training data/class size discrepancy
+        # print("--- %s seconds ---" % (time.time() - start_time))
+
+    # Balancing for training data/class size discrepancy
     if training_balance:
         if beta is None:
-            u = u@np.diag(1/c)
+            u = u @ np.diag(1 / c)
         else:
-            u = u@np.diag(beta/c)
+            u = u @ np.diag(beta / c)
 
-    return np.transpose(u),T
+    return np.transpose(u), T
 
 
-
-#Poisson L1 based on Split Bregman Method
-#Does not work as well as PoissonMBO
-def poissonL1(W,I,g,dataset,norm="none",lam=100,mu=1000,Nouter=30,Ninner=6,true_labels=None):
-
+# Poisson L1 based on Split Bregman Method
+# Does not work as well as PoissonMBO
+def poissonL1(W, I, g, dataset, norm="none", lam=100, mu=1000, Nouter=30, Ninner=6, true_labels=None):
     n = W.shape[0]
     k = len(np.unique(g))
 
-    #mu = mu*W.count_nonzero()/len(g)  #Normalize constants
-    gamma = 1/lam
+    # mu = mu*W.count_nonzero()/len(g)  #Normalize constants
+    gamma = 1 / lam
 
-    WI,WJ,WV = sparse.find(W)
-    B = sparse.coo_matrix((np.ones(len(WV),),(WI,WJ)),shape=(n,n)).tocsr() #Ones in all entries
-    L = graph_laplacian(2*W.multiply(W),norm=norm)
+    WI, WJ, WV = sparse.find(W)
+    B = sparse.coo_matrix((np.ones(len(WV), ), (WI, WJ)), shape=(n, n)).tocsr()  # Ones in all entries
+    L = graph_laplacian(2 * W.multiply(W), norm=norm)
     deg = degrees(W)
-    dt = 1/np.max(deg)
+    dt = 1 / np.max(deg)
 
-    #Random initial labeling
-    #u = random.rand(k,n)
-    #u = ProjectToSimplex(u)
-    u = np.zeros((k,n))
+    # Random initial labeling
+    # u = random.rand(k,n)
+    # u = ProjectToSimplex(u)
+    u = np.zeros((k, n))
 
-    #Set initial known labels
-    J = np.zeros(n,)
-    K = np.ones(n,)*g[0]
+    # Set initial known labels
+    J = np.zeros(n, )
+    K = np.ones(n, ) * g[0]
     J[I] = 1
     K[I] = g
-    Kg,_ = LabelsToVec(K)
-    Kg = Kg*J
+    Kg, _ = LabelsToVec(K)
+    Kg = Kg * J
 
-    #Poisson parameters
-    c = np.sum(Kg,axis=1)/len(I)
+    # Poisson parameters
+    c = np.sum(Kg, axis=1) / len(I)
     b = np.transpose(Kg)
-    b[I,:] = b[I,:]-c
-    b = (mu/lam)*np.transpose(b)
+    b[I, :] = b[I, :] - c
+    b = (mu / lam) * np.transpose(b)
 
-    #Initialize u via Poisson learning
-    u = np.zeros((k,n))
-    L = graph_laplacian(W,norm='none')
+    # Initialize u via Poisson learning
+    u = np.zeros((k, n))
+    L = graph_laplacian(W, norm='none')
     for j in range(k):
-        u[j,:] = pcg_solve(L,b[j,:])
-    u = np.transpose(np.transpose(u) - np.mean(u,axis=1))
-   
-    #Initialization
+        u[j, :] = pcg_solve(L, b[j, :])
+    u = np.transpose(np.transpose(u) - np.mean(u, axis=1))
+
+    # Initialization
     V = list()
     R = list()
     gradu = list()
     for j in range(k):
-        Gu = graph_gradient(W,u[j,:],I=WI,J=WJ,V=WV)
+        Gu = graph_gradient(W, u[j, :], I=WI, J=WJ, V=WV)
         gradu.append(Gu)
         V.append(Gu)
         R.append(Gu)
 
-    #Main loop for Split Bregman iteration
+    # Main loop for Split Bregman iteration
     for i in range(Nouter):
-        print('Outer:%d'%i)
+        print('Outer:%d' % i)
         for s in range(Ninner):
-            normV = 0*W
+            normV = 0 * W
             for j in range(k):
-                divVR = graph_divergence(R[j] - V[j],W)
-                u[j,:] = pcg_solve(L,b[j,:] + divVR,x0=u[j,:],tol=1e-10)
-                #for s in range(100):
+                divVR = graph_divergence(R[j] - V[j], W)
+                u[j, :] = pcg_solve(L, b[j, :] + divVR, x0=u[j, :], tol=1e-10)
+                # for s in range(100):
                 #    u[j,:] = u[j,:] + dt*(b[j,:] + divVR - u[j,:]*L)
-                gradu[j] = graph_gradient(W,u[j,:],I=WI,J=WJ,V=WV)
+                gradu[j] = graph_gradient(W, u[j, :], I=WI, J=WJ, V=WV)
                 V[j] = gradu[j] + R[j]
-                normV = normV + V[j].multiply(V[j]) 
+                normV = normV + V[j].multiply(V[j])
 
             normV = normV.sqrt()
 
-            #Shrinkage operation
-            #normV^{-1} for nonzero entries (tricky to do in sparse format)
-            #normV.eliminate_zeros(X)
-            normVinv = normV - (1-1e-10)*B
+            # Shrinkage operation
+            # normV^{-1} for nonzero entries (tricky to do in sparse format)
+            # normV.eliminate_zeros(X)
+            normVinv = normV - (1 - 1e-10) * B
             normVinv = -normVinv.log1p()
             normVinv = normVinv.expm1() + B
-            
-            C = normV.multiply(normVinv)
-            #print(np.sum(C>0))
-            #print(np.sum(C>0.9999))
 
-            #Compute shrinkage factor
-            #print(np.sum(normV>0))
-            shrink = normV - gamma*B
+            C = normV.multiply(normVinv)
+            # print(np.sum(C>0))
+            # print(np.sum(C>0.9999))
+
+            # Compute shrinkage factor
+            # print(np.sum(normV>0))
+            shrink = normV - gamma * B
             shrink = shrink.maximum(0)
-            #print(np.sum(shrink>0))
+            # print(np.sum(shrink>0))
             shrink = shrink.multiply(normVinv)
-            
-            #Apply shrinkage
+
+            # Apply shrinkage
             for j in range(k):
                 V[j] = V[j].multiply(shrink)
 
         for j in range(k):
             R[j] = R[j] + gradu[j] - V[j]
-         
 
-        #Compute accuracy if all labels are provided
+        # Compute accuracy if all labels are provided
         if true_labels is not None:
-            max_locations = np.argmax(u,axis=0)
+            max_locations = np.argmax(u, axis=0)
             labels = (np.unique(g))[max_locations]
             labels[I] = g
-            acc = accuracy(labels,true_labels,len(I))
-            print('Accuracy = %.2f'%acc)
+            acc = accuracy(labels, true_labels, len(I))
+            print('Accuracy = %.2f' % acc)
 
     return u
 
-#Heap functions
-#d = values in heap (indexed by graph vertex)
-#h = heap (contains indices of graph elements in heap)
-#p = pointers from graph back to heap (are updated with heap operations)
-#s = number of elements in heap
 
-#Sift up
-#i = heap index of element to be sifted up
-def SiftUp(d,h,s,p,i):
+# Heap functions
+# d = values in heap (indexed by graph vertex)
+# h = heap (contains indices of graph elements in heap)
+# p = pointers from graph back to heap (are updated with heap operations)
+# s = number of elements in heap
 
-    pi = int(i/2)  #Parent index in heap
+# Sift up
+# i = heap index of element to be sifted up
+def SiftUp(d, h, s, p, i):
+    pi = int(i / 2)  # Parent index in heap
     while pi != 0:
-        if d[h[pi]] > d[h[i]]:  #If parent larger, then swap
-            #Swap in heap
+        if d[h[pi]] > d[h[i]]:  # If parent larger, then swap
+            # Swap in heap
             tmp = h[pi]
             h[pi] = h[i]
             h[i] = tmp
 
-            #Update pointers to heap
-            p[h[i]] = i     
+            # Update pointers to heap
+            p[h[i]] = i
             p[h[pi]] = pi
 
-            #Update parent/child indices
+            # Update parent/child indices
             i = pi
-            pi = int(i/2)
+            pi = int(i / 2)
         else:
             pi = 0
-            
-            
-#Sift down
-#i = heap index of element to be sifted down
-def SiftDown(d,h,s,p,i):
 
-    ci = 2*i  #child index in heap
+
+# Sift down
+# i = heap index of element to be sifted down
+def SiftDown(d, h, s, p, i):
+    ci = 2 * i  # child index in heap
     while ci <= s:
-        if d[h[ci+1]] < d[h[ci]] and ci+1 <= s:  #Choose smallest child
-            ci = ci+1
+        if d[h[ci + 1]] < d[h[ci]] and ci + 1 <= s:  # Choose smallest child
+            ci = ci + 1
 
-        if d[h[ci]] < d[h[i]]:  #If child smaller, then swap
-            #Swap in heap
+        if d[h[ci]] < d[h[i]]:  # If child smaller, then swap
+            # Swap in heap
             tmp = h[ci]
             h[ci] = h[i]
             h[i] = tmp
 
-            #Update pointers to heap
-            p[h[i]] = i     
+            # Update pointers to heap
+            p[h[i]] = i
             p[h[ci]] = ci
 
-            #Update parent/child indices
+            # Update parent/child indices
             i = ci
-            ci = 2*i
+            ci = 2 * i
         else:
-            ci = s+1
+            ci = s + 1
 
-#Pop smallest off of heap
-#Returns index of smallest and size of new heap
-def PopHeap(d,h,s,p):
-    
-    #Index of smallest in heap
+
+# Pop smallest off of heap
+# Returns index of smallest and size of new heap
+def PopHeap(d, h, s, p):
+    # Index of smallest in heap
     i = h[1]
 
-    #Put last element on top of heap
+    # Put last element on top of heap
     h[1] = h[s]
 
-    #Update pointer
+    # Update pointer
     p[h[1]] = 1
 
-    #Sift down the heap
-    SiftDown(d,h,s-1,p,1)
+    # Sift down the heap
+    SiftDown(d, h, s - 1, p, 1)
 
-    return i,s-1
-     
-#Push element onto heap
-#i = Graph index to add to heap
-def PushHeap(d,h,s,p,i):
+    return i, s - 1
 
-    h[s+1] = i  #add to heap at end
-    p[i] = s+1  #Update pointer to heap
-    SiftUp(d,h,s+1,p,s+1)
 
-    return s+1
+# Push element onto heap
+# i = Graph index to add to heap
+def PushHeap(d, h, s, p, i):
+    h[s + 1] = i  # add to heap at end
+    p[i] = s + 1  # Update pointer to heap
+    SiftUp(d, h, s + 1, p, s + 1)
 
-def stencil_solver(ui,u,w=None):
+    return s + 1
 
+
+def stencil_solver(ui, u, w=None):
     if w is None:
         w = np.ones((len(u),))
 
     m = len(u)
 
-    #Sort neighbors
+    # Sort neighbors
     I = np.argsort(u)
     u = u[I]
     w = w[I]
 
-    f = np.zeros((m+1,))
+    f = np.zeros((m + 1,))
     for i in range(m):
-        f[i] = np.sum(np.maximum(u[i]-u,0)**2)
+        f[i] = np.sum(np.maximum(u[i] - u, 0) ** 2)
 
-    f[m] = np.maximum(1,f[m-1])
+    f[m] = np.maximum(1, f[m - 1])
     k = np.argmin(f < 1)
 
     b = np.sum(u[:k])
-    c = np.sum(u[:k]**2)
-    t = (b + np.sqrt(b*b - k*c + k))/k
+    c = np.sum(u[:k] ** 2)
+    t = (b + np.sqrt(b * b - k * c + k)) / k
 
-    check = np.sum(np.maximum(t - u,0)**2)
+    check = np.sum(np.maximum(t - u, 0) ** 2)
 
-    if(abs(check - 1) > 1e-5):
+    if (abs(check - 1) > 1e-5):
         print("Error")
 
     return t
-    #return np.min(u) + 1
+    # return np.min(u) + 1
 
-#C code version of dijkstra
-def cDijkstra(W,I,g,WI=None,WJ=None,K=None):
 
+# C code version of dijkstra
+def cDijkstra(W, I, g, WI=None, WJ=None, K=None):
     n = W.shape[0]
     k = len(I)
-    u = np.ones((n,))*1e10          #HJ Solver
-    l = -np.ones((n,),dtype=int)    #Index of closest label
+    u = np.ones((n,)) * 1e10  # HJ Solver
+    l = -np.ones((n,), dtype=int)  # Index of closest label
 
-    if (WI == None) or (WJ == None) or (K==None):
-        #Reformat weight matrix W into form more useful for Dijkstra
-        WI,WJ,WV = sparse.find(W)
+    if (WI == None) or (WJ == None) or (K == None):
+        # Reformat weight matrix W into form more useful for Dijkstra
+        WI, WJ, WV = sparse.find(W)
         K = np.array((WJ[1:] - WJ[:-1]).nonzero()) + 1
-        K = np.append(0,np.append(K,len(WJ)))
+        K = np.append(0, np.append(K, len(WJ)))
 
-    try:  #Try to use fast C version, if compiled
+    try:  # Try to use fast C version, if compiled
 
         import cmodules.cgraphpy as cgp
 
-        #Type casting and memory blocking
-        u = np.ascontiguousarray(u,dtype=np.float64)
-        l = np.ascontiguousarray(l,dtype=np.int32)
-        WI = np.ascontiguousarray(WI,dtype=np.int32)
-        WV = np.ascontiguousarray(WV,dtype=np.float64)
-        K = np.ascontiguousarray(K,dtype=np.int32)
-        I = np.ascontiguousarray(I,dtype=np.int32)
-        g = np.ascontiguousarray(g,dtype=np.float64)
+        # Type casting and memory blocking
+        u = np.ascontiguousarray(u, dtype=np.float64)
+        l = np.ascontiguousarray(l, dtype=np.int32)
+        WI = np.ascontiguousarray(WI, dtype=np.int32)
+        WV = np.ascontiguousarray(WV, dtype=np.float64)
+        K = np.ascontiguousarray(K, dtype=np.int32)
+        I = np.ascontiguousarray(I, dtype=np.int32)
+        g = np.ascontiguousarray(g, dtype=np.float64)
 
-        cgp.dijkstra(u,l,WI,K,WV,I,g,1.0)
+        cgp.dijkstra(u, l, WI, K, WV, I, g, 1.0)
     except:
         print("You need to compile the cmodules!")
         sys.exit(2)
 
     return u
 
-#Solve a general HJ equation with fast marching
-def HJsolver(W,I,g,WI=None,WJ=None,K=None,p=1):
 
+# Solve a general HJ equation with fast marching
+def HJsolver(W, I, g, WI=None, WJ=None, K=None, p=1):
     n = W.shape[0]
     k = len(I)
-    u = np.ones((n,))*1e10          #HJ Solver
-    l = -np.ones((n,),dtype=int)    #Index of closest label
+    u = np.ones((n,)) * 1e10  # HJ Solver
+    l = -np.ones((n,), dtype=int)  # Index of closest label
 
-    if (WI == None) or (WJ == None) or (K==None):
-        #Reformat weight matrix W into form more useful for Dijkstra
-        WI,WJ,WV = sparse.find(W)
+    if (WI == None) or (WJ == None) or (K == None):
+        # Reformat weight matrix W into form more useful for Dijkstra
+        WI, WJ, WV = sparse.find(W)
         K = np.array((WJ[1:] - WJ[:-1]).nonzero()) + 1
-        K = np.append(0,np.append(K,len(WJ)))
+        K = np.append(0, np.append(K, len(WJ)))
 
-    try:  #Try to use fast C version, if compiled
+    try:  # Try to use fast C version, if compiled
 
         import cmodules.cgraphpy as cgp
 
-        #Type casting and memory blocking
-        u = np.ascontiguousarray(u,dtype=np.float64)
-        l = np.ascontiguousarray(l,dtype=np.int32)
-        WI = np.ascontiguousarray(WI,dtype=np.int32)
-        WV = np.ascontiguousarray(WV,dtype=np.float64)
-        K = np.ascontiguousarray(K,dtype=np.int32)
-        I = np.ascontiguousarray(I,dtype=np.int32)
-        g = np.ascontiguousarray(g,dtype=np.int32)
+        # Type casting and memory blocking
+        u = np.ascontiguousarray(u, dtype=np.float64)
+        l = np.ascontiguousarray(l, dtype=np.int32)
+        WI = np.ascontiguousarray(WI, dtype=np.int32)
+        WV = np.ascontiguousarray(WV, dtype=np.float64)
+        K = np.ascontiguousarray(K, dtype=np.int32)
+        I = np.ascontiguousarray(I, dtype=np.int32)
+        g = np.ascontiguousarray(g, dtype=np.int32)
 
-        cgp.HJsolver(u,l,WI,K,WV,I,g,1.0,p,1.0)
+        cgp.HJsolver(u, l, WI, K, WV, I, g, 1.0, p, 1.0)
 
     except:
 
-        #Initialization
-        s = 0                           #Size of heap
-        h = -np.ones((n+1,),dtype=int)  #Active points heap (indices of active points)
-        A = np.zeros((n,),dtype=bool)   #Active flag
-        p = -np.ones((n,),dtype=int)    #Pointer back to heap
-        V = np.zeros((n,),dtype=bool)   #Finalized flag
-        l = -np.ones((n,),dtype=int)    #Index of closest label
+        # Initialization
+        s = 0  # Size of heap
+        h = -np.ones((n + 1,), dtype=int)  # Active points heap (indices of active points)
+        A = np.zeros((n,), dtype=bool)  # Active flag
+        p = -np.ones((n,), dtype=int)  # Pointer back to heap
+        V = np.zeros((n,), dtype=bool)  # Finalized flag
+        l = -np.ones((n,), dtype=int)  # Index of closest label
 
-        #Build active points heap and set distance = 0 for initial points
+        # Build active points heap and set distance = 0 for initial points
         for i in range(k):
-            s = PushHeap(u,h,s,p,I[i])
-            u[I[i]] = g[i]      #Initialize distance to zero
-            A[I[i]] = True   #Set active flag to true
-            l[I[i]] = I[i]   #Set index of closest label
-        
-        #Dijkstra's algorithm 
+            s = PushHeap(u, h, s, p, I[i])
+            u[I[i]] = g[i]  # Initialize distance to zero
+            A[I[i]] = True  # Set active flag to true
+            l[I[i]] = I[i]  # Set index of closest label
+
+        # Dijkstra's algorithm
         while s > 0:
-            i,s = PopHeap(u,h,s,p) #Pop smallest element off of heap
+            i, s = PopHeap(u, h, s, p)  # Pop smallest element off of heap
 
-            #Finalize this point
-            V[i] = True  #Mark as finalized
-            A[i] = False #Set active flag to false
+            # Finalize this point
+            V[i] = True  # Mark as finalized
+            A[i] = False  # Set active flag to false
 
-            #Update neighbors (the code below is wrong: compare against C sometime)
-            for j in WI[K[i]:K[i+1]]:
+            # Update neighbors (the code below is wrong: compare against C sometime)
+            for j in WI[K[i]:K[i + 1]]:
                 if j != i and V[j] == False:
-                    nn_ind = WI[K[j]:K[j+1]]
-                    w_vals = WV[K[j]:K[j+1]]
+                    nn_ind = WI[K[j]:K[j + 1]]
+                    w_vals = WV[K[j]:K[j + 1]]
                     u_vals = u[nn_ind]
-                    u_tmp = stencil_solver(u[j],u_vals,w=w_vals)
-                    if A[j]:  #If j is already active
-                        if u_tmp < u[j]: #Need to update heap
+                    u_tmp = stencil_solver(u[j], u_vals, w=w_vals)
+                    if A[j]:  # If j is already active
+                        if u_tmp < u[j]:  # Need to update heap
                             u[j] = u_tmp
-                            SiftUp(u,h,s,p,p[j])
+                            SiftUp(u, h, s, p, p[j])
                             l[j] = l[i]
-                    else: #If j is not active
-                        #Add to heap and initialize distance, active flag, and label index
-                        s = PushHeap(u,h,s,p,j)
+                    else:  # If j is not active
+                        # Add to heap and initialize distance, active flag, and label index
+                        s = PushHeap(u, h, s, p, j)
                         u[j] = u_tmp
-                        A[j] = True  
+                        A[j] = True
                         l[j] = l[i]
 
     return u
 
-#eikonal classifier
-def eikonalSSL(W,I,g,p=2,beta=None):
 
-    
-    k = len(I) #Number of labels
-    n = W.shape[0] #Number of datapoints
-    d = np.zeros((n,))        #Distance function
-    l = -np.ones((n,),dtype=int)    #Index of closest label
+# eikonal classifier
+def eikonalSSL(W, I, g, p=2, beta=None):
+    k = len(I)  # Number of labels
+    n = W.shape[0]  # Number of datapoints
+    d = np.zeros((n,))  # Distance function
+    l = -np.ones((n,), dtype=int)  # Index of closest label
 
-    #Reformat weight matrix W into form more useful for Dijkstra
-    WI,WJ,WV = sparse.find(W)
+    # Reformat weight matrix W into form more useful for Dijkstra
+    WI, WJ, WV = sparse.find(W)
     K = np.array((WJ[1:] - WJ[:-1]).nonzero()) + 1
-    K = np.append(0,np.append(K,len(WJ)))
+    K = np.append(0, np.append(K, len(WJ)))
 
     c_code = False
-    try:  #Try to use fast C version, if compiled
+    try:  # Try to use fast C version, if compiled
 
         import cmodules.cgraphpy as cgp
 
-        #Type casting and memory blocking
-        d = np.ascontiguousarray(d,dtype=np.float64)
-        l = np.ascontiguousarray(l,dtype=np.int32)
-        WI = np.ascontiguousarray(WI,dtype=np.int32)
-        WV = np.ascontiguousarray(WV,dtype=np.float64)
-        K = np.ascontiguousarray(K,dtype=np.int32)
-        I = np.ascontiguousarray(I,dtype=np.int32)
+        # Type casting and memory blocking
+        d = np.ascontiguousarray(d, dtype=np.float64)
+        l = np.ascontiguousarray(l, dtype=np.int32)
+        WI = np.ascontiguousarray(WI, dtype=np.int32)
+        WV = np.ascontiguousarray(WV, dtype=np.float64)
+        K = np.ascontiguousarray(K, dtype=np.int32)
+        I = np.ascontiguousarray(I, dtype=np.int32)
 
         c_code = True
     except:
         c_code = False
 
-
     labels = np.unique(g)
     numl = len(labels)
 
-    u = np.zeros((numl,n))
+    u = np.zeros((numl, n))
     for i in range(numl):
         ind = I[g == labels[i]]
         lab = np.zeros((len(ind),))
 
         if c_code:
-            ind = np.ascontiguousarray(ind,dtype=np.int32)
-            lab = np.ascontiguousarray(lab,dtype=np.int32)
-            cgp.HJsolver(d,l,WI,K,WV,ind,lab,1.0,p,0.0)
-            u[i,:] = -d
+            ind = np.ascontiguousarray(ind, dtype=np.int32)
+            lab = np.ascontiguousarray(lab, dtype=np.int32)
+            cgp.HJsolver(d, l, WI, K, WV, ind, lab, 1.0, p, 0.0)
+            u[i, :] = -d
         else:
-            u[i,:] = -HJsolver(W,ind,lab,WI=WI,WV=WV,K=K,p=p)
-        
+            u[i, :] = -HJsolver(W, ind, lab, WI=WI, WV=WV, K=K, p=p)
 
     if beta is not None:
-        _,s = volume_label_projection(u,beta,dt=-0.5)
-        u = np.diag(s)@u
+        _, s = volume_label_projection(u, beta, dt=-0.5)
+        u = np.diag(s) @ u
     return u
 
 
-#Nearest neighbor classifier (graph geodesic distance)
-def nearestneighbor(W,I,g):
+# Nearest neighbor classifier (graph geodesic distance)
+def nearestneighbor(W, I, g):
+    k = len(I)  # Number of labels
+    n = W.shape[0]  # Number of datapoints
+    d = np.ones((n,)) * 1e10  # Distance function
+    l = -np.ones((n,), dtype=int)  # Index of closest label
 
-    
-    k = len(I) #Number of labels
-    n = W.shape[0] #Number of datapoints
-    d = np.ones((n,))*1e10        #Distance function
-    l = -np.ones((n,),dtype=int)    #Index of closest label
-
-    #Reformat weight matrix W into form more useful for Dijkstra
-    WI,WJ,WV = sparse.find(W)
+    # Reformat weight matrix W into form more useful for Dijkstra
+    WI, WJ, WV = sparse.find(W)
     K = np.array((WJ[1:] - WJ[:-1]).nonzero()) + 1
-    K = np.append(0,np.append(K,len(WJ)))
+    K = np.append(0, np.append(K, len(WJ)))
 
-    try:  #Try to use fast C version of dijkstra, if compiled
+    try:  # Try to use fast C version of dijkstra, if compiled
 
         import cmodules.cgraphpy as cgp
 
-        #Type casting and memory blocking
-        d = np.ascontiguousarray(d,dtype=np.float64)
-        l = np.ascontiguousarray(l,dtype=np.int32)
-        WI = np.ascontiguousarray(WI,dtype=np.int32)
-        WV = np.ascontiguousarray(WV,dtype=np.float64)
-        K = np.ascontiguousarray(K,dtype=np.int32)
-        I = np.ascontiguousarray(I,dtype=np.int32)
-        init = np.ascontiguousarray(np.zeros_like(I),dtype=np.float64)
+        # Type casting and memory blocking
+        d = np.ascontiguousarray(d, dtype=np.float64)
+        l = np.ascontiguousarray(l, dtype=np.int32)
+        WI = np.ascontiguousarray(WI, dtype=np.int32)
+        WV = np.ascontiguousarray(WV, dtype=np.float64)
+        K = np.ascontiguousarray(K, dtype=np.int32)
+        I = np.ascontiguousarray(I, dtype=np.int32)
+        init = np.ascontiguousarray(np.zeros_like(I), dtype=np.float64)
 
-        cgp.dijkstra(d,l,WI,K,WV,I,init,1.0)
-        
-    except: #Use python version, which is slower
+        cgp.dijkstra(d, l, WI, K, WV, I, init, 1.0)
 
-        #Initialization
-        s = 0                           #Size of heap
-        h = -np.ones((n+1,),dtype=int)  #Active points heap (indices of active points)
-        A = np.zeros((n,),dtype=bool)   #Active flag
-        p = -np.ones((n,),dtype=int)    #Pointer back to heap
-        V = np.zeros((n,),dtype=bool)   #Finalized flag
+    except:  # Use python version, which is slower
 
-        
-        #Build active points heap and set distance = 0 for initial points
+        # Initialization
+        s = 0  # Size of heap
+        h = -np.ones((n + 1,), dtype=int)  # Active points heap (indices of active points)
+        A = np.zeros((n,), dtype=bool)  # Active flag
+        p = -np.ones((n,), dtype=int)  # Pointer back to heap
+        V = np.zeros((n,), dtype=bool)  # Finalized flag
+
+        # Build active points heap and set distance = 0 for initial points
         for i in range(k):
-            d[I[i]] = 0      #Initialize distance to zero
-            A[I[i]] = True   #Set active flag to true
-            l[I[i]] = I[i]   #Set index of closest label
-            s = PushHeap(d,h,s,p,I[i])
-        
-        #Dijkstra's algorithm 
+            d[I[i]] = 0  # Initialize distance to zero
+            A[I[i]] = True  # Set active flag to true
+            l[I[i]] = I[i]  # Set index of closest label
+            s = PushHeap(d, h, s, p, I[i])
+
+        # Dijkstra's algorithm
         while s > 0:
-            i,s = PopHeap(d,h,s,p) #Pop smallest element off of heap
+            i, s = PopHeap(d, h, s, p)  # Pop smallest element off of heap
 
-            #Finalize this point
-            V[i] = True  #Mark as finalized
-            A[i] = False #Set active flag to false
+            # Finalize this point
+            V[i] = True  # Mark as finalized
+            A[i] = False  # Set active flag to false
 
-            #Update neighbors
-            #for j in WI[K[i]:K[i+1]]:
-            for jj in range(K[i],K[i+1]):
+            # Update neighbors
+            # for j in WI[K[i]:K[i+1]]:
+            for jj in range(K[i], K[i + 1]):
                 j = WI[jj]
                 if j != i and V[j] == False:
-                    if A[j]:  #If j is already active
+                    if A[j]:  # If j is already active
                         tmp_dist = d[i] + WV[jj]
-                        if tmp_dist < d[j]: #Need to update heap
+                        if tmp_dist < d[j]:  # Need to update heap
                             d[j] = tmp_dist
-                            SiftUp(d,h,s,p,p[j])
+                            SiftUp(d, h, s, p, p[j])
                             l[j] = l[i]
-                    else: #If j is not active
-                        #Add to heap and initialize distance, active flag, and label index
+                    else:  # If j is not active
+                        # Add to heap and initialize distance, active flag, and label index
                         d[j] = d[i] + WV[jj]
-                        A[j] = True  
+                        A[j] = True
                         l[j] = l[i]
-                        s = PushHeap(d,h,s,p,j)
+                        s = PushHeap(d, h, s, p, j)
 
-    #Set labels based on nearest neighbor
+    # Set labels based on nearest neighbor
     u = np.zeros((n,))
     u[I] = g
-    u,_ = LabelsToVec(u[l])
+    u, _ = LabelsToVec(u[l])
 
     return u
 
 
-#Computes accuracy of clustering
-def clustering_accuracy(L,L_true):
-
+# Computes accuracy of clustering
+def clustering_accuracy(L, L_true):
     unique_classes = np.unique(L_true)
     num_classes = len(unique_classes)
 
@@ -2394,130 +2369,131 @@ def clustering_accuracy(L,L_true):
             C[i][j] = np.sum((L == i) & (L_true != j))
     row_ind, col_ind = opt.linear_sum_assignment(C)
 
-    return 100*(1-C[row_ind,col_ind].sum()/len(L))
+    return 100 * (1 - C[row_ind, col_ind].sum() / len(L))
 
-#Spectral embedding
-#Projects the graph to R^k via spectral projection 
-#Method can be 'unnormalized', 'ShiMalik', or 'NgJordanWeiss'
-def spectral_embedding(W,k,method='NgJordanWeiss'):
 
+# Spectral embedding
+# Projects the graph to R^k via spectral projection
+# Method can be 'unnormalized', 'ShiMalik', or 'NgJordanWeiss'
+def spectral_embedding(W, k, method='NgJordanWeiss'):
     n = W.shape[0]
 
     if method == 'unnormalized':
-        L = graph_laplacian(W,norm='none') 
-        vals, vec = sparse.linalg.eigs(L,k=k,which='SM')
+        L = graph_laplacian(W, norm='none')
+        vals, vec = sparse.linalg.eigs(L, k=k, which='SM')
         vec = vec.real
         vals = vals.real
     elif method == 'ShiMalik':
         D = degree_matrix(W)
-        L = graph_laplacian(W,norm='none') 
-        vals, vec = sparse.linalg.eigs(L,M=D,k=k,which='SM')
+        L = graph_laplacian(W, norm='none')
+        vals, vec = sparse.linalg.eigs(L, M=D, k=k, which='SM')
         vec = vec.real
         vals = vals.real
     elif method == 'NgJordanWeiss':
-        L = graph_laplacian(W,norm='normalized') 
-        vals, vec = sparse.linalg.eigs(L,k=k,which='SM')
+        L = graph_laplacian(W, norm='normalized')
+        vals, vec = sparse.linalg.eigs(L, k=k, which='SM')
         vec = vec.real
         vals = vals.real
-        norms = np.sum(vec*vec,axis=1)
-        T = sparse.spdiags(norms**(-1/2),0,n,n)
-        vec = T@vec  #Normalize rows
+        norms = np.sum(vec * vec, axis=1)
+        T = sparse.spdiags(norms ** (-1 / 2), 0, n, n)
+        vec = T @ vec  # Normalize rows
 
     return vec
 
-def kmeans(X,k):
+
+def kmeans(X, k):
     KM = cluster.KMeans(n_clusters=k).fit(X)
     return KM.labels_
 
-#Spectral Clustering
-def spectral_cluster(W,k,method='NgJordanWeiss',extra_dim=0):
 
-    V = spectral_embedding(W,k+extra_dim,method=method)
+# Spectral Clustering
+def spectral_cluster(W, k, method='NgJordanWeiss', extra_dim=0):
+    V = spectral_embedding(W, k + extra_dim, method=method)
     kmeans = cluster.KMeans(n_clusters=k).fit(V)
-    #V = spectral_embedding(W,k,method=method)
-    #kmeans = cluster.KMeans(n_clusters=k).fit(V)
+    # V = spectral_embedding(W,k,method=method)
+    # kmeans = cluster.KMeans(n_clusters=k).fit(V)
     return kmeans.labels_
 
 
-#INCRES clustering
-#Bresson, Xavier, et al. "An incremental reseeding strategy for clustering." International Conference on Imaging, Vision and Learning based on Optimization and PDEs. Springer, Cham, 2016.
-#W = weight matrix 
-def incres_cluster(W,k,speed,T,labels):
-
+# INCRES clustering
+# Bresson, Xavier, et al. "An incremental reseeding strategy for clustering." International Conference on Imaging, Vision and Learning based on Optimization and PDEs. Springer, Cham, 2016.
+# W = weight matrix
+def incres_cluster(W, k, speed, T, labels):
     n = W.shape[0]
 
-    #Increment
-    Dm = np.maximum(int(speed*1e-4*n/k),1)
-    
-    #Random initial labeling
-    u = random.randint(0,k,size=n)
+    # Increment
+    Dm = np.maximum(int(speed * 1e-4 * n / k), 1)
 
-    #Initialization
-    F = np.zeros((n,k))
+    # Random initial labeling
+    u = random.randint(0, k, size=n)
+
+    # Initialization
+    F = np.zeros((n, k))
     J = np.arange(n).astype(int)
 
-    #Random walk transition
-    D = degree_matrix(W,p=-1)
-    P = W*D
+    # Random walk transition
+    D = degree_matrix(W, p=-1)
+    P = W * D
 
     m = int(1)
     for i in range(T):
-        #Plant
+        # Plant
         F.fill(0)
         for r in range(k):
             I = u == r
             ind = J[I]
-            F[ind[random.choice(np.sum(I),m)],r] = 1
-        
-        #Grow
+            F[ind[random.choice(np.sum(I), m)], r] = 1
+
+        # Grow
         while np.min(F) == 0:
-            F = P*F
+            F = P * F
 
-        #Harvest
-        u = np.argmax(F,axis=1)
+        # Harvest
+        u = np.argmax(F, axis=1)
 
-        #Increment
+        # Increment
         m = m + Dm
-            
-        #Compute accuracy
-        if labels is not None: 
-            acc = clustering_accuracy(u,labels)
-            print("Iteration "+str(i)+": Accuracy = %.2f" % acc+"%%, #seeds= %d" % m)
+
+        # Compute accuracy
+        if labels is not None:
+            acc = clustering_accuracy(u, labels)
+            print("Iteration " + str(i) + ": Accuracy = %.2f" % acc + "%%, #seeds= %d" % m)
 
     return u
 
-#Check if graph is connected
+
+# Check if graph is connected
 def isconnected(W):
-    num_comp,comp = csgraph.connected_components(W)
+    num_comp, comp = csgraph.connected_components(W)
     if num_comp == 1:
         return True
     else:
         return False
 
-#Graph-based clustering
-#W = sparse weight matrix describing graph
-#method = SSL method
+
+# Graph-based clustering
+# W = sparse weight matrix describing graph
+# method = SSL method
 #   Options: incres
-def graph_clustering(W,k,true_labels=None,method="incres",speed=5,T=100,extra_dim=0):
-
+def graph_clustering(W, k, true_labels=None, method="incres", speed=5, T=100, extra_dim=0):
     n = W.shape[0]
-    
-    #Symmetrize W, if not already symmetric
-    W = (W + W.transpose())/2
 
-    #Check if connected
+    # Symmetrize W, if not already symmetric
+    W = (W + W.transpose()) / 2
+
+    # Check if connected
     if not isconnected(W):
         print('Warning: Graph is not connected!')
-    
-    #Clustering
-    if method=="incres":
-        labels = incres_cluster(W,k,speed,T,true_labels)
-    elif method=="spectral":
-        labels = spectral_cluster(W,k,method="unnormalized",extra_dim=extra_dim)
-    elif method=="spectralshimalik":
-        labels = spectral_cluster(W,k,method="ShiMalik",extra_dim=extra_dim)
-    elif method=="spectralngjordanweiss":
-        labels = spectral_cluster(W,k,method="NgJordanWeiss",extra_dim=extra_dim)
+
+    # Clustering
+    if method == "incres":
+        labels = incres_cluster(W, k, speed, T, true_labels)
+    elif method == "spectral":
+        labels = spectral_cluster(W, k, method="unnormalized", extra_dim=extra_dim)
+    elif method == "spectralshimalik":
+        labels = spectral_cluster(W, k, method="ShiMalik", extra_dim=extra_dim)
+    elif method == "spectralngjordanweiss":
+        labels = spectral_cluster(W, k, method="NgJordanWeiss", extra_dim=extra_dim)
     else:
         print("Invalid choice of clustering method.")
         sys.exit()
@@ -2525,15 +2501,19 @@ def graph_clustering(W,k,true_labels=None,method="incres",speed=5,T=100,extra_di
     return labels
 
 
-#Graph-based semi-supervised learning
-#W = sparse weight matrix describing graph
-#I = indices of labeled datapoints
-#g = values of labels
-#method = SSL method
+# Graph-based semi-supervised learning
+# W = sparse weight matrix describing graph
+# I = indices of labeled datapoints
+# g = values of labels
+# method = SSL method
 #   Options: laplace, poisson, poisson_nodeg, wnll, properlyweighted, plaplace, randomwalk
-def graph_ssl(W,I,g,D=None,Ns=40,mu=1,numT=50,beta=None,method="laplace",p=3,volume_mult=0.5,alpha=2,zeta=1e7,r=0.1,epsilon=0.05,X=None,plaplace_solver="GradientDescentCcode",norm="none",true_labels=None,eigvals=None,eigvecs=None,dataset=None,T=0,use_cuda=False,return_vector=False,poisson_training_balance=True):
-
-    one_shot_methods = ["mbo","poisson","poissonbalanced","poissonvolume","poissonmbo_volume","poissonmbo","poissonl1","nearestneighbor","poissonmbobalanced","volumembo","poissonvolumembo","dynamiclabelpropagation","sparselabelpropagation","centeredkernel","eikonal"]
+def graph_ssl(W, I, g, D=None, Ns=40, mu=1, numT=50, beta=None, method="laplace", p=3, volume_mult=0.5, alpha=2,
+              zeta=1e7, r=0.1, epsilon=0.05, X=None, plaplace_solver="GradientDescentCcode", norm="none",
+              true_labels=None, eigvals=None, eigvecs=None, dataset=None, T=0, use_cuda=False, return_vector=False,
+              poisson_training_balance=True):
+    one_shot_methods = ["mbo", "poisson", "poissonbalanced", "poissonvolume", "poissonmbo_volume", "poissonmbo",
+                        "poissonl1", "nearestneighbor", "poissonmbobalanced", "volumembo", "poissonvolumembo",
+                        "dynamiclabelpropagation", "sparselabelpropagation", "centeredkernel", "eikonal"]
 
     n = W.shape[0]
 
@@ -2542,175 +2522,182 @@ def graph_ssl(W,I,g,D=None,Ns=40,mu=1,numT=50,beta=None,method="laplace",p=3,vol
     if beta is None:
         beta = np.ones((len(np.unique(g)),))
 
-    #Symmetrize D,W, if not already symmetric
-    W = (W + W.transpose())/2
+    # Symmetrize D,W, if not already symmetric
+    # W = (W + W.transpose()) / 2
     if D is not None:
-        D = sparse_max(D,D.transpose())
+        D = sparse_max(D, D.transpose())
 
     if not isconnected(W):
         print('Warning: Graph is not connected!')
-    
-    #One shot methods
+
+    # One shot methods
     if method in one_shot_methods:
 
-        if method=="mbo":
-            u = multiclassMBO(W,I,g,eigvals,eigvecs,dataset,true_labels=true_labels)
-        elif method=="volumembo":
-            u = volumeMBO(W,I,g,dataset,beta,T,volume_mult)
-        elif method=="poissonvolumembo":
-            u = poisson_volumeMBO(W,I,g,dataset,beta,T,volume_mult)
-        elif method=="poissonmbo_old":
-            u = poissonMBO(W,I,g,dataset,np.ones_like(beta),true_labels=true_labels,temp=T,use_cuda=use_cuda,Ns=Ns,mu=mu,T=numT)
-        elif method=="poissonmbobalanced":
-            u = poissonMBO(W,I,g,dataset,beta,true_labels=true_labels,temp=T,use_cuda=use_cuda,Ns=Ns,mu=mu,T=numT)
-        elif method=="poissonl1":
-            u = poissonL1(W,I,g,dataset,true_labels=true_labels)
-        elif method=="poisson":
-            u,_ = poisson(W,I,g,true_labels=true_labels,use_cuda=use_cuda,training_balance=poisson_training_balance)
-        elif method=="poissonbalanced":
-            u,_ = poisson(W,I,g,true_labels=true_labels,use_cuda=use_cuda,training_balance=poisson_training_balance,beta = beta)
-        elif method=="poissonvolume":
-            u = PoissonVolume(W,I,g,true_labels=true_labels,use_cuda=use_cuda,training_balance=poisson_training_balance,beta = beta)
-        elif method=="poissonmbo":
-            u = poissonMBO_volume(W,I,g,dataset,beta,true_labels=true_labels,temp=T,use_cuda=use_cuda,Ns=Ns,mu=mu)
-        elif method=="dynamiclabelpropagation":
-            u = DynamicLabelPropagation(W,I,g,true_labels=true_labels)
-        elif method=="sparselabelpropagation":
-            u = SparseLabelPropagation(W,I,g,true_labels=true_labels)
-        elif method=="centeredkernel":
-            u = CenteredKernel(W,I,g,true_labels=true_labels)
-        elif method=="nearestneighbor":
-            #Use distance matrix if provided, instead of weight matrix
+        if method == "mbo":
+            u = multiclassMBO(W, I, g, eigvals, eigvecs, dataset, true_labels=true_labels)
+        elif method == "volumembo":
+            u = volumeMBO(W, I, g, dataset, beta, T, volume_mult)
+        elif method == "poissonvolumembo":
+            u = poisson_volumeMBO(W, I, g, dataset, beta, T, volume_mult)
+        elif method == "poissonmbo_old":
+            u = poissonMBO(W, I, g, dataset, np.ones_like(beta), true_labels=true_labels, temp=T, use_cuda=use_cuda,
+                           Ns=Ns, mu=mu, T=numT)
+        elif method == "poissonmbobalanced":
+            u = poissonMBO(W, I, g, dataset, beta, true_labels=true_labels, temp=T, use_cuda=use_cuda, Ns=Ns, mu=mu,
+                           T=numT)
+        elif method == "poissonl1":
+            u = poissonL1(W, I, g, dataset, true_labels=true_labels)
+        elif method == "poisson":
+            u, _ = poisson(W, I, g, true_labels=true_labels, use_cuda=use_cuda,
+                           training_balance=poisson_training_balance)
+        elif method == "poissonbalanced":
+            u, _ = poisson(W, I, g, true_labels=true_labels, use_cuda=use_cuda,
+                           training_balance=poisson_training_balance, beta=beta)
+        elif method == "poissonvolume":
+            u = PoissonVolume(W, I, g, true_labels=true_labels, use_cuda=use_cuda,
+                              training_balance=poisson_training_balance, beta=beta)
+        elif method == "poissonmbo":
+            u = poissonMBO_volume(W, I, g, dataset, beta, true_labels=true_labels, temp=T, use_cuda=use_cuda, Ns=Ns,
+                                  mu=mu)
+        elif method == "dynamiclabelpropagation":
+            u = DynamicLabelPropagation(W, I, g, true_labels=true_labels)
+        elif method == "sparselabelpropagation":
+            u = SparseLabelPropagation(W, I, g, true_labels=true_labels)
+        elif method == "centeredkernel":
+            u = CenteredKernel(W, I, g, true_labels=true_labels)
+        elif method == "nearestneighbor":
+            # Use distance matrix if provided, instead of weight matrix
             if D is None:
-                u = nearestneighbor(W,I,g)
+                u = nearestneighbor(W, I, g)
             else:
-                u = nearestneighbor(D,I,g)
-        elif method=="eikonal":
-            #Use distance matrix if provided, instead of weight matrix
+                u = nearestneighbor(D, I, g)
+        elif method == "eikonal":
+            # Use distance matrix if provided, instead of weight matrix
             if D is None:
-                u = eikonalSSL(W,I,g,p=p,beta=beta)
+                u = eikonalSSL(W, I, g, p=p, beta=beta)
             else:
-                u = eikonalSSL(W,I,g,p=p,beta=beta)
+                u = eikonalSSL(W, I, g, p=p, beta=beta)
 
-    else:  #One vs rest methods
+    else:  # One vs rest methods
 
-        k = len(np.unique(g))  #Number of labels
-        u = np.zeros((k,n))
+        k = len(np.unique(g))  # Number of labels
+        u = np.zeros((k, n))
         i = 0
         for l in np.unique(g):
-            h = g==l 
+            h = g == l
 
-            #Solve binary classification problem
-            if method=="laplace":
-                v = laplace_solve(W,I,h,norm=norm)
-            elif method=="shift":
-                v = shift_solve(W,I,h)       
-            elif method=="meanshift":
-                v = meanshift_solve(W,I,h)       
-            elif method=="wnll":
-                v = wnll_solve(W,I,h)
-            elif method=="properlyweighted":
+            # Solve binary classification problem
+            if method == "laplace":
+                v = laplace_solve(W, I, h, norm=norm)
+            elif method == "shift":
+                v = shift_solve(W, I, h)
+            elif method == "meanshift":
+                v = meanshift_solve(W, I, h)
+            elif method == "wnll":
+                v = wnll_solve(W, I, h)
+            elif method == "properlyweighted":
                 if X is None:
                     print("Must supply raw data points for properly weighted Laplacian.")
                     sys.exit()
-                v = properlyweighted_solve(W,I,h,X,alpha,zeta,r)
-            elif method=="plaplace":
-                v = plaplace_solve(W,I,h,p,sol_method=plaplace_solver,norm=norm)
-            elif method=="randomwalk":
-                v = randomwalk_solve(W,I,h,epsilon)
+                v = properlyweighted_solve(W, I, h, X, alpha, zeta, r)
+            elif method == "plaplace":
+                v = plaplace_solve(W, I, h, p, sol_method=plaplace_solver, norm=norm)
+            elif method == "randomwalk":
+                v = randomwalk_solve(W, I, h, epsilon)
             else:
                 print("Invalid choice of SSL method.")
                 sys.exit()
 
-            #Update labels
-            u[i,:] = v
-            i = i+1
+            # Update labels
+            u[i, :] = v
+            i = i + 1
 
     if return_vector:
         labels = np.transpose(u)
     else:
-        #Select labels
-        max_locations = np.argmax(u,axis=0)
+        # Select labels
+        max_locations = np.argmax(u, axis=0)
         labels = (np.unique(g))[max_locations]
 
-        #Make sure to set labels at labeled points
+        # Make sure to set labels at labeled points
         labels[I] = g
 
-
     return labels
-    confidence = usort[0,:] - usort[1,:]
+    confidence = usort[0, :] - usort[1, :]
 
-#Read numerical data from csv file
+
+# Read numerical data from csv file
 def csvread(filename):
-    
-    X = [] 
+    X = []
     with open(filename) as csv_file:
-        csv_reader = csv.reader(csv_file,delimiter=',')
+        csv_reader = csv.reader(csv_file, delimiter=',')
         n = 0
         for row in csv_reader:
-            if not row[0]=='Date/Time':
+            if not row[0] == 'Date/Time':
                 X += [float(i) for i in row]
                 m = len(row)
                 n += 1
 
-    return np.array(X).reshape((n,m))
+    return np.array(X).reshape((n, m))
 
-#Compute average and standard deviation of accuracy over many trials
-#Reads data from csv file filename
-#Returns accuracy (acc), standard deviation (stddev) and number of labeled points (N)
+
+# Compute average and standard deviation of accuracy over many trials
+# Reads data from csv file filename
+# Returns accuracy (acc), standard deviation (stddev) and number of labeled points (N)
 def accuracy_statistics(filename):
-
     X = csvread(filename)
-    N = np.unique(X[:,0])
+    N = np.unique(X[:, 0])
 
     acc = []
     stddev = []
     quant = []
     for n in N:
-        Y = X[X[:,0]==n,1]
+        Y = X[X[:, 0] == n, 1]
         Y = np.sort(Y)
         acc += [np.mean(Y)]
-        quant += [Y[int(3*len(Y)/4)]]
+        quant += [Y[int(3 * len(Y) / 4)]]
         stddev += [np.std(Y)]
-        #print("%.1f (%.1f)"%(np.mean(Y),np.std(Y)), end="&")
+        # print("%.1f (%.1f)"%(np.mean(Y),np.std(Y)), end="&")
 
-    num_trials = len(X[:,0])/len(N) 
-    return acc,stddev,N,quant,num_trials
+    num_trials = len(X[:, 0]) / len(N)
+    return acc, stddev, N, quant, num_trials
 
-#Makes an accuracy table to be included in LaTeX documents
-#dataset = name of dataset
-#ssl_methods = list of names of methods to compare
-def accuracy_table_icml(dataset,ssl_method_list,legend_list,num_of_classes,testerror=False,savefile='tables.tex',title='',quantile=False,append=False,directory='Results',fontsize='small',small_caps=True,two_column=True):
 
-    #Retrieve number of different label rates m
-    accfile = directory+"/"+dataset+"_"+ssl_method_list[0]+"_accuracy.csv"
-    acc,stddev,N,quant,num_trials = accuracy_statistics(accfile)
+# Makes an accuracy table to be included in LaTeX documents
+# dataset = name of dataset
+# ssl_methods = list of names of methods to compare
+def accuracy_table_icml(dataset, ssl_method_list, legend_list, num_of_classes, testerror=False, savefile='tables.tex',
+                        title='', quantile=False, append=False, directory='Results', fontsize='small', small_caps=True,
+                        two_column=True):
+    # Retrieve number of different label rates m
+    accfile = directory + "/" + dataset + "_" + ssl_method_list[0] + "_accuracy.csv"
+    acc, stddev, N, quant, num_trials = accuracy_statistics(accfile)
     m = len(N)
 
-    #Determine best algorithm at each label rate
-    best = [None]*m
-    best_score = [0]*m
-    i=0
+    # Determine best algorithm at each label rate
+    best = [None] * m
+    best_score = [0] * m
+    i = 0
     for ssl_method in ssl_method_list:
 
-        accfile = directory+"/"+dataset+"_"+ssl_method+"_accuracy.csv"
-        acc,stddev,N,quant,num_trials = accuracy_statistics(accfile)
+        accfile = directory + "/" + dataset + "_" + ssl_method + "_accuracy.csv"
+        acc, stddev, N, quant, num_trials = accuracy_statistics(accfile)
         if quantile:
             acc = quant
         for j in range(m):
             if acc[j] > best_score[j]:
                 best_score[j] = acc[j]
                 best[j] = i
-        i+=1
-    
+        i += 1
+
     if append:
-        f = open(savefile,"r")
+        f = open(savefile, "r")
         lines = f.readlines()
         f.close()
-        f = open(savefile,"w")
+        f = open(savefile, "w")
         f.writelines([item for item in lines[:-1]])
     else:
-        f = open(savefile,"w")
+        f = open(savefile, "w")
         f.write("\\documentclass{article}\n")
         f.write("\\usepackage[T1]{fontenc}\n")
         f.write("\\usepackage{booktabs}\n")
@@ -2723,12 +2710,13 @@ def accuracy_table_icml(dataset,ssl_method_list,legend_list,num_of_classes,teste
     else:
         f.write("\\begin{table}[t!]\n")
     f.write("\\vspace{-3mm}\n")
-    f.write("\\caption{"+title+": Average (standard deviation) classification accuracy over %d trials.}\n"%num_trials)
+    f.write(
+        "\\caption{" + title + ": Average (standard deviation) classification accuracy over %d trials.}\n" % num_trials)
     f.write("\\vspace{-3mm}\n")
-    f.write("\\label{tab:"+title+"}\n")
+    f.write("\\label{tab:" + title + "}\n")
     f.write("\\vskip 0.15in\n")
     f.write("\\begin{center}\n")
-    f.write("\\begin{"+fontsize+"}\n")
+    f.write("\\begin{" + fontsize + "}\n")
     if small_caps:
         f.write("\\begin{sc}\n")
     f.write("\\begin{tabular}{l")
@@ -2738,29 +2726,29 @@ def accuracy_table_icml(dataset,ssl_method_list,legend_list,num_of_classes,teste
     f.write("\\toprule\n")
     f.write("\\# Labels per class")
     for i in range(m):
-        f.write("&\\textbf{%d}"%int(N[i]/num_of_classes))
+        f.write("&\\textbf{%d}" % int(N[i] / num_of_classes))
     f.write("\\\\\n")
     f.write("\\midrule\n")
     i = 0
     for ssl_method in ssl_method_list:
         f.write(legend_list[i].ljust(15))
-        accfile = directory+"/"+dataset+"_"+ssl_method+"_accuracy.csv"
-        acc,stddev,N,quant,num_trials = accuracy_statistics(accfile)
+        accfile = directory + "/" + dataset + "_" + ssl_method + "_accuracy.csv"
+        acc, stddev, N, quant, num_trials = accuracy_statistics(accfile)
         for j in range(m):
-            if best[j] == i: 
-                f.write("&{\\bf %.1f"%acc[j]+" (%.1f)}"%stddev[j])
-                #f.write("&${\\bf %.1f"%acc[j]+"\\pm %.1f}$"%stddev[j])
+            if best[j] == i:
+                f.write("&{\\bf %.1f" % acc[j] + " (%.1f)}" % stddev[j])
+                # f.write("&${\\bf %.1f"%acc[j]+"\\pm %.1f}$"%stddev[j])
             else:
-                f.write("&%.1f"%acc[j]+" (%.1f)      "%stddev[j])
-                #f.write("&$%.1f"%acc[j]+"\\pm %.1f$     "%stddev[j])
+                f.write("&%.1f" % acc[j] + " (%.1f)      " % stddev[j])
+                # f.write("&$%.1f"%acc[j]+"\\pm %.1f$     "%stddev[j])
         f.write("\\\\\n")
-        i+=1
+        i += 1
 
     f.write("\\bottomrule\n")
     f.write("\\end{tabular}\n")
     if small_caps:
         f.write("\\end{sc}\n")
-    f.write("\\end{"+fontsize+"}\n")
+    f.write("\\end{" + fontsize + "}\n")
     f.write("\\end{center}\n")
     f.write("\\vskip -0.1in\n")
     if two_column:
@@ -2771,58 +2759,60 @@ def accuracy_table_icml(dataset,ssl_method_list,legend_list,num_of_classes,teste
     f.write("\\end{document}\n")
     f.close()
 
-def plot_graph(X,W,l=None):
-#Other colormaps, coolwarm, winter, Set3, tab20b, rainbow
 
-    #plt.ion()
-    colors = np.array([[1.0,0,0],[0,0.9,0]])
+def plot_graph(X, W, l=None):
+    # Other colormaps, coolwarm, winter, Set3, tab20b, rainbow
+
+    # plt.ion()
+    colors = np.array([[1.0, 0, 0], [0, 0.9, 0]])
     plt.rcParams['figure.facecolor'] = 'navy'
 
     n = W.shape[0]
-    I,J,V = sparse.find(W)
+    I, J, V = sparse.find(W)
 
     for i in range(len(I)):
-        xval = [X[I[i],0],X[J[i],0]]
-        yval = [X[I[i],1],X[J[i],1]]
-        #plt.plot(xval,yval, color='black', linewidth=0.15, markersize=0)
-        plt.plot(xval,yval, color=[0.5,0.5,0.5], linewidth=0.5, markersize=0)
+        xval = [X[I[i], 0], X[J[i], 0]]
+        yval = [X[I[i], 1], X[J[i], 1]]
+        # plt.plot(xval,yval, color='black', linewidth=0.15, markersize=0)
+        plt.plot(xval, yval, color=[0.5, 0.5, 0.5], linewidth=0.5, markersize=0)
 
     if l is None:
-        #plt.scatter(X[:,0],X[:,1], s=30, cmap='Paired')
-        plt.scatter(X[:,0],X[:,1], s=8, zorder=3)
+        # plt.scatter(X[:,0],X[:,1], s=30, cmap='Paired')
+        plt.scatter(X[:, 0], X[:, 1], s=8, zorder=3)
     else:
-        #plt.scatter(X[:,0],X[:,1], s=30, c=l, cmap='Paired')
-        plt.scatter(X[:,0],X[:,1], s=8, c=colors[l,:], zorder=3)
+        # plt.scatter(X[:,0],X[:,1], s=30, c=l, cmap='Paired')
+        plt.scatter(X[:, 0], X[:, 1], s=8, c=colors[l, :], zorder=3)
 
     plt.axis("off")
 
-#plot average and standard deviation of accuracy over many trials
-#dataset = name of dataset
-#ssl_methods = list of names of methods to compare
-def accuracy_plot(dataset,ssl_method_list,legend_list,num_of_classes,title=None,errorbars=False,testerror=False,savefile=None,loglog=False):
 
-    #plt.ion()
+# plot average and standard deviation of accuracy over many trials
+# dataset = name of dataset
+# ssl_methods = list of names of methods to compare
+def accuracy_plot(dataset, ssl_method_list, legend_list, num_of_classes, title=None, errorbars=False, testerror=False,
+                  savefile=None, loglog=False):
+    # plt.ion()
     plt.figure()
     if errorbars:
         matplotlib.rcParams.update({'errorbar.capsize': 5})
     matplotlib.rcParams.update({'font.size': 16})
-    styles = ['^b-','or-','dg-','sk-','pm-','xc-','*y-']
+    styles = ['^b-', 'or-', 'dg-', 'sk-', 'pm-', 'xc-', '*y-']
     i = 0
     for ssl_method in ssl_method_list:
-        accfile = "Results/"+dataset+"_"+ssl_method+"_accuracy.csv"
-        acc,stddev,N,quant,num_trials = accuracy_statistics(accfile)
+        accfile = "Results/" + dataset + "_" + ssl_method + "_accuracy.csv"
+        acc, stddev, N, quant, num_trials = accuracy_statistics(accfile)
         if testerror:
-            acc = 100-acc
-            #z = np.polyfit(np.log(N),np.log(acc),1)
-            #print(z[0])
+            acc = 100 - acc
+            # z = np.polyfit(np.log(N),np.log(acc),1)
+            # print(z[0])
         if errorbars:
-            plt.errorbar(N/num_of_classes,acc,fmt=styles[i],yerr=stddev,label=legend_list[i])
+            plt.errorbar(N / num_of_classes, acc, fmt=styles[i], yerr=stddev, label=legend_list[i])
         else:
             if loglog:
-                plt.loglog(N/num_of_classes,acc,styles[i],label=legend_list[i])
+                plt.loglog(N / num_of_classes, acc, styles[i], label=legend_list[i])
             else:
-                plt.plot(N/num_of_classes,acc,styles[i],label=legend_list[i])
-        i+=1
+                plt.plot(N / num_of_classes, acc, styles[i], label=legend_list[i])
+        i += 1
     plt.xlabel('Number of labels per class')
     if testerror:
         plt.ylabel('Test error (%)')
@@ -2840,13 +2830,12 @@ def accuracy_plot(dataset,ssl_method_list,legend_list,num_of_classes,title=None,
         plt.show()
 
 
-#Select labels based on a ranking
-#Prodces a label permutation with 1 trial with same variations of #labels per class as the label permutation perm provided as input
-def SelectLabels(labels,permold,rank):
-
+# Select labels based on a ranking
+# Prodces a label permutation with 1 trial with same variations of #labels per class as the label permutation perm provided as input
+def SelectLabels(labels, permold, rank):
     perm = permold
 
-    #Number of classes
+    # Number of classes
     L = np.unique(labels)
     k = len(L)
     n = len(labels)
@@ -2856,8 +2845,7 @@ def SelectLabels(labels,permold,rank):
     for i in range(m):
         num[i] = len(permold[i])
 
-    
-    num,unique_perm = np.unique(num,return_index=True)
+    num, unique_perm = np.unique(num, return_index=True)
 
     perm = list()
     for i in unique_perm:
@@ -2868,38 +2856,35 @@ def SelectLabels(labels,permold,rank):
             numl = np.sum(pl == l)
             K = labels == l
             c = np.argsort(-rank[K])
-            j = np.arange(0,n)[K]
+            j = np.arange(0, n)[K]
             ind = ind + j[c[:numl]].tolist()
         ind = np.array(ind)
         perm.append(ind)
 
-
     return perm
 
-#PageRank algorithm
-def PageRank(W,alpha):
 
+# PageRank algorithm
+def PageRank(W, alpha):
     n = W.shape[0]
 
     u = np.ones((n,))
     v = np.ones((n,))
 
-    D = degree_matrix(W,p=-1)
-    P = np.transpose(D*W)
+    D = degree_matrix(W, p=-1)
+    P = np.transpose(D * W)
 
     err = 1
     while err > 1e-10:
-        w = alpha*P*u + (1-alpha)*v
-        err = np.max(np.absolute(w-u))
+        w = alpha * P * u + (1 - alpha) * v
+        err = np.max(np.absolute(w - u))
         u = w
-
 
     return u
 
 
-#Print help
+# Print help
 def print_help():
-    
     print('========================================================')
     print('GraphLearning: Python package for graph-based learning. ')
     print('========================================================')
@@ -2914,7 +2899,8 @@ def print_help():
     print('   -a (--algorithm=): Learning algorithm (default=Laplace)')
     print('   -k (--knn=): Number of nearest neighbors (default=10)')
     print('   -t (--num_trials=): Number of trial permutations to run (default=all)')
-    print('   -l (--label_perm=): Choice of label permutation file (format=dataset<label_perm>_permutations.npz). (default is empty).')
+    print(
+        '   -l (--label_perm=): Choice of label permutation file (format=dataset<label_perm>_permutations.npz). (default is empty).')
     print('   -p (--p=): Value of p for plaplace method (default=3)')
     print('   -n (--normalization=): Laplacian normalization (default=none)')
     print('                 Choices: none, normalized')
@@ -2929,69 +2915,111 @@ def print_help():
     print('   -r (--results): Turns off automatic saving of results to .csv file')
     print('   -b (--verbose): Turns on verbose mode (displaying more intermediate steps).')
 
-#Default settings
+
+# Default settings
 def default_dataset(): return 'MNIST'
+
+
 def default_metric(): return 'L2'
+
+
 def default_algorithm(): return 'laplace'
+
+
 def default_k(): return 10
+
+
 def default_t(): return '-1'
+
+
 def default_label_perm(): return ''
+
+
 def default_p(): return 3
+
+
 def default_norm(): return "none"
+
+
 def default_use_cuda(): return False
+
+
 def default_T(): return 0
+
+
 def default_num_cores(): return 1
+
+
 def default_results(): return True
+
+
 def default_num_classes(): return 10
+
+
 def default_speed(): return 2
+
+
 def default_num_iter(): return 1000
+
+
 def default_extra_dim(): return 0
+
+
 def default_volume_constraint(): return 0.5
+
+
 def default_verbose(): return False
+
+
 def default_poisson_training_balance(): return True
 
-#Main subroutine. Is calleable from other scripts as graphlearning.main(...)
-def main(dataset = default_dataset(), metric = default_metric(), algorithm = default_algorithm(), k = default_k(), t = default_t(), label_perm = default_label_perm(), p = default_p(), norm = default_norm(), use_cuda = default_use_cuda(), T = default_T(), num_cores = default_num_cores(), results = default_results(), num_classes = default_num_classes(), speed = default_speed(), num_iter = default_num_iter(), extra_dim = default_extra_dim(), volume_constraint = default_volume_constraint(), verbose = default_verbose(), poisson_training_balance = default_poisson_training_balance()):
 
-    #Load labels
+# Main subroutine. Is calleable from other scripts as graphlearning.main(...)
+def main(dataset=default_dataset(), metric=default_metric(), algorithm=default_algorithm(), k=default_k(),
+         t=default_t(), label_perm=default_label_perm(), p=default_p(), norm=default_norm(),
+         use_cuda=default_use_cuda(), T=default_T(), num_cores=default_num_cores(), results=default_results(),
+         num_classes=default_num_classes(), speed=default_speed(), num_iter=default_num_iter(),
+         extra_dim=default_extra_dim(), volume_constraint=default_volume_constraint(), verbose=default_verbose(),
+         poisson_training_balance=default_poisson_training_balance()):
+    # Load labels
     labels = load_labels(dataset)
 
-    #Load nearest neighbor data
-    I,J,D = load_kNN_data(dataset,metric=metric)
+    # Load nearest neighbor data
+    I, J, D = load_kNN_data(dataset, metric=metric)
 
-    #Consturct weight matrix and distance matrix
-    W = weight_matrix(I,J,D,k)
-    Wdist = dist_matrix(I,J,D,k)
+    # Consturct weight matrix and distance matrix
+    W = weight_matrix(I, J, D, k)
+    Wdist = dist_matrix(I, J, D, k)
 
-    #Load label permutation (including restrictions in t)
-    perm = load_label_permutation(dataset,label_perm=label_perm,t=t)
+    # Load label permutation (including restrictions in t)
+    perm = load_label_permutation(dataset, label_perm=label_perm, t=t)
 
-    #Load eigenvector data if MBO selected
+    # Load eigenvector data if MBO selected
     if algorithm == 'mbo':
-        eigvals,eigvecs = load_mbo_eig(dataset,metric,k)
+        eigvals, eigvecs = load_mbo_eig(dataset, metric, k)
     else:
         eigvals = None
         eigvecs = None
 
-    #Output file
-    outfile = "Results/"+dataset+label_perm+"_"+metric+"_k%d"%k
+    # Output file
+    outfile = "Results/" + dataset + label_perm + "_" + metric + "_k%d" % k
     if algorithm == 'plaplace':
-        outfile = outfile+"_p%.1f"%p+algorithm[1:]+"_"+norm
+        outfile = outfile + "_p%.1f" % p + algorithm[1:] + "_" + norm
     elif algorithm == 'eikonal':
-        outfile = outfile+"_p%.1f"%p+algorithm
+        outfile = outfile + "_p%.1f" % p + algorithm
     else:
-        outfile = outfile+"_"+algorithm
+        outfile = outfile + "_" + algorithm
 
     if algorithm == 'volumembo' or algorithm == 'poissonvolumembo':
-        outfile = outfile+"_T%.3f"%T
-        outfile = outfile+"_V%.3f"%volume_constraint
+        outfile = outfile + "_T%.3f" % T
+        outfile = outfile + "_V%.3f" % volume_constraint
 
     if algorithm == 'poisson' and poisson_training_balance == False:
-        outfile = outfile+"_NoBal"
+        outfile = outfile + "_NoBal"
 
-    outfile = outfile+"_accuracy.csv"
+    outfile = outfile + "_accuracy.csv"
 
-    #Print basic info
+    # Print basic info
     print('========================================================')
     print('GraphLearning: Python package for graph-based learning. ')
     print('========================================================')
@@ -2999,31 +3027,31 @@ def main(dataset = default_dataset(), metric = default_metric(), algorithm = def
     print('Graph-based Clustering & Semi-Supervised Learning')
     print('========================================================')
     print('                                                        ')
-    print('Dataset: '+dataset)
-    print('Metric: '+metric)
-    print('Number of neighbors: %d'%k)
-    print('Learning algorithm: '+algorithm)
-    print('Laplacian normalization: '+norm)
+    print('Dataset: ' + dataset)
+    print('Metric: ' + metric)
+    print('Number of neighbors: %d' % k)
+    print('Learning algorithm: ' + algorithm)
+    print('Laplacian normalization: ' + norm)
     if algorithm == 'plaplace' or algorithm == 'eikonal':
         print("p-Laplace/eikonal value p=%.2f" % p)
     if algorithm in clustering_algorithms:
-        print('Number of clusters: %d'%num_classes)
+        print('Number of clusters: %d' % num_classes)
         if algorithm == 'INCRES':
-            print('INCRES speed: %.2f'%speed)
-            print('Number of iterations: %d'%num_iter)
+            print('INCRES speed: %.2f' % speed)
+            print('Number of iterations: %d' % num_iter)
         if algorithm[:8] == 'Spectral':
-            print('Number of extra dimensions: %d'%extra_dim)
+            print('Number of extra dimensions: %d' % extra_dim)
     else:
-        print('Number of trial permutations: %d'%len(perm))
-        print('Permutations file: LabelPermutations/'+dataset+label_perm+'_permutations.npz')
+        print('Number of trial permutations: %d' % len(perm))
+        print('Permutations file: LabelPermutations/' + dataset + label_perm + '_permutations.npz')
 
         if algorithm == 'volumembo' or algorithm == 'poissonvolumembo':
-            print("Using temperature=%.3f"%T)
-            print("Volume constraints = [%.3f,%.3f]"%(volume_constraint,2-volume_constraint))
+            print("Using temperature=%.3f" % T)
+            print("Volume constraints = [%.3f,%.3f]" % (volume_constraint, 2 - volume_constraint))
 
-        #If output file selected
+        # If output file selected
         if results:
-            print('Output file: '+outfile)
+            print('Output file: ' + outfile)
 
     print('                                                        ')
     print('========================================================')
@@ -3033,67 +3061,71 @@ def main(dataset = default_dataset(), metric = default_metric(), algorithm = def
     if verbose:
         true_labels = labels
 
-    #If clustering algorithm was chosen
+    # If clustering algorithm was chosen
     if algorithm in clustering_algorithms:
-        #Clustering
-        u = graph_clustering(W,num_classes,labels,method=algorithm,T=num_iter,speed=speed,extra_dim=extra_dim)
+        # Clustering
+        u = graph_clustering(W, num_classes, labels, method=algorithm, T=num_iter, speed=speed, extra_dim=extra_dim)
 
-        #Compute accuracy
-        acc = clustering_accuracy(u,labels)
+        # Compute accuracy
+        acc = clustering_accuracy(u, labels)
 
-        #Print to terminal
-        print("Accuracy: %.2f" % acc+"%")
+        # Print to terminal
+        print("Accuracy: %.2f" % acc + "%")
 
-    #If semi-supervised algorithms chosen
+    # If semi-supervised algorithms chosen
     else:
-        #If output file selected
+        # If output file selected
         if results:
-            #Check if Results directory exists
+            # Check if Results directory exists
             if not os.path.exists('Results'):
                 os.makedirs('Results')
 
             now = datetime.datetime.now()
-            
-            #Add time stamp to output file
-            f = open(outfile,"a+")
-            f.write("Date/Time, "+now.strftime("%Y-%m-%d_%H:%M")+"\n")
+
+            # Add time stamp to output file
+            f = open(outfile, "a+")
+            f.write("Date/Time, " + now.strftime("%Y-%m-%d_%H:%M") + "\n")
             f.close()
 
-        #Loop over label permutations
+        # Loop over label permutations
         print("Number of labels, Accuracy")
+
         def one_trial(label_ind):
 
-            #Number of labels
+            # Number of labels
             m = len(label_ind)
 
-            #Label proportions (used by some algroithms)
+            # Label proportions (used by some algroithms)
             beta = label_proportions(labels)
 
             start_time = time.time()
-            #Graph-based semi-supervised learning
-            u = graph_ssl(W,label_ind,labels[label_ind],D=Wdist,beta=beta,method=algorithm,epsilon=0.3,p=p,norm=norm,eigvals=eigvals,eigvecs=eigvecs,dataset=dataset,T=T,use_cuda=use_cuda,volume_mult=volume_constraint,true_labels=true_labels,poisson_training_balance=poisson_training_balance)
+            # Graph-based semi-supervised learning
+            u = graph_ssl(W, label_ind, labels[label_ind], D=Wdist, beta=beta, method=algorithm, epsilon=0.3, p=p,
+                          norm=norm, eigvals=eigvals, eigvecs=eigvecs, dataset=dataset, T=T, use_cuda=use_cuda,
+                          volume_mult=volume_constraint, true_labels=true_labels,
+                          poisson_training_balance=poisson_training_balance)
             print("--- %s seconds ---" % (time.time() - start_time))
 
-            #Compute accuracy
-            acc = accuracy(u,labels,m)
-            
-            #Print to terminal
+            # Compute accuracy
+            acc = accuracy(u, labels, m)
+
+            # Print to terminal
             print("%d" % m + ",%.2f" % acc)
 
-            #Write to file
+            # Write to file
             if results:
-                f = open(outfile,"a+")
+                f = open(outfile, "a+")
                 f.write("%d" % m + ",%.2f\n" % acc)
                 f.close()
 
-        #Number of cores for parallel processing
-        num_cores = min(multiprocessing.cpu_count(),num_cores)
+        # Number of cores for parallel processing
+        num_cores = min(multiprocessing.cpu_count(), num_cores)
         Parallel(n_jobs=num_cores)(delayed(one_trial)(label_ind) for label_ind in perm)
 
 
 if __name__ == '__main__':
 
-    #Default settings
+    # Default settings
     dataset = default_dataset()
     metric = default_metric()
     algorithm = default_algorithm()
@@ -3114,9 +3146,13 @@ if __name__ == '__main__':
     verbose = default_verbose()
     poisson_training_balance = default_poisson_training_balance()
 
-    #Read command line arguments
+    # Read command line arguments
     try:
-        opts, args = getopt.getopt(sys.argv[1:],"hd:m:k:a:p:n:v:N:s:i:x:t:cl:T:j:rbo",["dataset=","metric=","knn=","algorithm=","p=","normalization=","volume_constraint=","num_classes=","speed=","num_iter=","extra_dim=","num_trials=","cuda","label_perm=","temperature=","--num_cores=","results","verbose","poisson_training_balance"])
+        opts, args = getopt.getopt(sys.argv[1:], "hd:m:k:a:p:n:v:N:s:i:x:t:cl:T:j:rbo",
+                                   ["dataset=", "metric=", "knn=", "algorithm=", "p=", "normalization=",
+                                    "volume_constraint=", "num_classes=", "speed=", "num_iter=", "extra_dim=",
+                                    "num_trials=", "cuda", "label_perm=", "temperature=", "--num_cores=", "results",
+                                    "verbose", "poisson_training_balance"])
     except getopt.GetoptError:
         print_help()
         sys.exit(2)
@@ -3163,8 +3199,8 @@ if __name__ == '__main__':
         elif opt in ("-o", "--poisson_training_balance"):
             poisson_training_balance = False
 
-    #Call main subroutine
-    main(dataset=dataset, metric=metric, algorithm=algorithm, k=k, t=t, label_perm=label_perm, p=p, norm=norm, use_cuda=use_cuda, T=T, num_cores=num_cores, results=results, num_classes=num_classes, speed=speed, num_iter=num_iter, extra_dim=extra_dim, volume_constraint=volume_constraint, verbose=verbose, poisson_training_balance=poisson_training_balance)
-
-
-
+    # Call main subroutine
+    main(dataset=dataset, metric=metric, algorithm=algorithm, k=k, t=t, label_perm=label_perm, p=p, norm=norm,
+         use_cuda=use_cuda, T=T, num_cores=num_cores, results=results, num_classes=num_classes, speed=speed,
+         num_iter=num_iter, extra_dim=extra_dim, volume_constraint=volume_constraint, verbose=verbose,
+         poisson_training_balance=poisson_training_balance)

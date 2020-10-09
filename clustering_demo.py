@@ -7,8 +7,8 @@ import sklearn.datasets as datasets
 #data
 n = 500
 X,L = datasets.make_moons(n_samples=n,noise=0.1)
-#X,L = datasets.make_circles(n_samples=n,noise=0.075,factor=0.5)
-#X,L = datasets.make_blobs(n_samples=n, cluster_std=[1,1.5,0.5])
+# X,L = datasets.make_circles(n_samples=n,noise=0.075,factor=0.5)
+# X,L = datasets.make_blobs(n_samples=n, cluster_std=[1,1.5,0.5])
 
 #Build graph
 k = 10
