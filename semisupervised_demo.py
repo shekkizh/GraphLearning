@@ -7,7 +7,7 @@ import utils.graph_utils as utils
 from utils.graph_construction import knn_graph, nnk_graph
 
 # data
-n = 100
+n = 500
 # X, L = datasets.make_moons(n_samples=n, noise=0.1)
 X, L = datasets.make_circles(n_samples=n, noise=0.075, factor=0.5)
 # X,L = datasets.make_blobs(n_samples=n, cluster_std=[1,1.5,0.5])
@@ -29,11 +29,11 @@ m = 2  # 5 labels per class
 ind = gl.randomize_labels(L, m)  # indices of labeled points
 
 # Semi-supervised learning
-l_knn = gl.graph_ssl(W_knn, ind, L[ind], method='poissonmbo')
+l_knn = gl.graph_ssl(W_knn, ind, L[ind], method='poissonmbo', symmetrize=False)
 knn_acc = gl.accuracy(l_knn, L, m)
 l_knn[ind] = 2
 
-l_nnk = gl.graph_ssl(W_nnk, ind, L[ind], method='poissonmbo')
+l_nnk = gl.graph_ssl(W_nnk, ind, L[ind], method='poissonmbo', symmetrize=False)
 nnk_acc = gl.accuracy(l_nnk, L, m)
 l_nnk[ind] = 2
 

@@ -18,7 +18,6 @@ import numpy as np
 from scipy import sparse
 import functools
 
-
 _plt_figures = []
 
 
@@ -224,7 +223,7 @@ def _plot_graph(G, vertex_color, vertex_size, highlight,
         edge_color = (G.plotting['edge_color'],)
     elif not is_color(edge_color):
         edge_color = np.asarray(edge_color).squeeze()
-        #check_shape(edge_color, 'Edge color', G.n_edges)
+        # check_shape(edge_color, 'Edge color', G.n_edges)
         edge_color = 0.9 * normalize(edge_color)
         edge_color = [
             np.tile(G.plotting['edge_color'][:3], [len(edge_color), 1]),
@@ -236,7 +235,7 @@ def _plot_graph(G, vertex_color, vertex_size, highlight,
         edge_width = G.plotting['edge_width']
     elif not np.isscalar(edge_width):
         edge_width = np.array(edge_width).squeeze()
-        #check_shape(edge_width, 'Edge width', G.n_edges)
+        # check_shape(edge_width, 'Edge width', G.n_edges)
         edge_width = G.plotting['edge_width'] * 2 * normalize(edge_width)
 
     if limits is None:
@@ -436,8 +435,8 @@ class Graph:
         sources = W.row
         targets = W.col
         weights = W.data
-        #print(f"{self.n_edges}, {sources.size}, {targets.size}, {weights.size}")
-        #assert self.n_edges == sources.size == targets.size == weights.size
+        # print(f"{self.n_edges}, {sources.size}, {targets.size}, {weights.size}")
+        # assert self.n_edges == sources.size == targets.size == weights.size
         return sources, targets, weights
 
     def plot(self, vertex_color=None, vertex_size=None, highlight=[],
@@ -450,4 +449,3 @@ class Graph:
                            edges=edges, indices=indices, colorbar=colorbar,
                            edge_color=edge_color, edge_width=edge_width,
                            limits=limits, ax=ax, title=title)
-
