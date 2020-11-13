@@ -19,6 +19,7 @@ import sklearn.cluster as cluster
 from sklearn.decomposition import PCA
 import sys, getopt, time, csv, torch, os, multiprocessing
 from joblib import Parallel, delayed
+from utils.non_neg_qpsolver import non_negative_qpsolver
 
 clustering_algorithms = ['incres', 'spectral', 'spectralshimalik', 'spectralngjordanweiss']
 
@@ -157,10 +158,10 @@ def label_proportions(labels):
 
 
 # Constructs a weight matrix for graph on mxn grid with NSEW neighbors
-def grid_graph(m, n):
-    X, Y = np.mgrid[:m, :n]
-
-    return W
+# def grid_graph(m, n):
+#     X, Y = np.mgrid[:m, :n]
+#
+#     return W
 
 
 # Reweights the graph to use self-tuning weights
@@ -628,6 +629,48 @@ def weight_matrix(I, J, D, k, f=exp_weight, symmetrize=True):
         W = (W + W.transpose()) / 2;
 
     return W
+
+
+def nnk_weight_matrix(dataset, metric, mask, knn_param, reg=1e-10, symmetrize=True):
+    # Try to Load data
+    X = load_dataset(dataset=dataset, metric=metric)
+    X_normalized = X / np.linalg.norm(X, axis=1, keepdims=True)
+
+    num_of_nodes = mask.shape[0]
+    neighbor_indices = np.zeros((num_of_nodes, knn_param))
+    weight_values = np.zeros((num_of_nodes, knn_param))
+    error_values = np.ones((num_of_nodes, knn_param))
+
+    for node_i in range(num_of_nodes):
+        non_zero_index = np.array(mask[node_i, :])
+        non_zero_index = np.delete(non_zero_index, np.where(non_zero_index == node_i))
+        if len(non_zero_index) > knn_param:
+            non_zero_index = non_zero_index[:knn_param]
+        x_neighbors = X_normalized[non_zero_index]
+
+        g_i = 0.5 + np.dot(x_neighbors, X_normalized[node_i]) / 2
+        G_i = 0.5 + np.dot(x_neighbors, x_neighbors.T) / 2
+        # x_opt, check = non_negative_qpsolver(G_i, g_i, g_i, reg)
+        # error_values[node_i, :] = 1 - 2 * np.dot(x_opt, g_i) + np.dot(x_opt, np.dot(G_i, x_opt))
+        x_opt = g_i
+        weight_values[node_i, :] = x_opt / np.sum(x_opt)
+        neighbor_indices[node_i, :] = non_zero_index
+
+    row_indices = np.expand_dims(np.arange(0, num_of_nodes), 1)
+    row_indices = np.tile(row_indices, [1, knn_param])
+    adjacency = sparse.coo_matrix((weight_values.ravel(), (row_indices.ravel(), neighbor_indices.ravel())),
+                                  shape=(num_of_nodes, num_of_nodes))
+    if symmetrize:
+        error = sparse.coo_matrix((error_values.ravel(), (row_indices.ravel(), neighbor_indices.ravel())),
+                                  shape=(num_of_nodes, num_of_nodes))
+        # Alternate way of doing: error_index = sparse.find(error > error.T); adjacency[error_index[0], error_index[
+        # 1]] = 0
+        adjacency = adjacency.multiply(error < error.T)
+        adjacency = adjacency.maximum(adjacency.T)
+
+    adjacency.eliminate_zeros()
+    error_values = error_values[:, 0]
+    return adjacency.tocsr(), error_values
 
 
 # Compute boundary points
@@ -1890,8 +1933,7 @@ def PoissonVolume(W, I, g, true_labels=None, use_cuda=False, training_balance=Tr
     return np.diag(s) @ u
 
 
-# Poisson learning
-def poisson(W, I, g, true_labels=None, use_cuda=False, training_balance=True, beta=None, min_iter=50):
+def original_poisson(W, I, g, true_labels=None, use_cuda=False, training_balance=True, beta=None, min_iter=50):
     n = W.shape[0]
     unique_labels = np.unique(g)
     k = len(unique_labels)
@@ -1966,6 +2008,94 @@ def poisson(W, I, g, true_labels=None, use_cuda=False, training_balance=True, be
 
         # print("--- %s seconds ---" % (time.time() - start_time))
 
+    # Balancing for training data/class size discrepancy
+    if training_balance:
+        if beta is None:
+            u = u @ np.diag(1 / c)
+        else:
+            u = u @ np.diag(beta / c)
+
+    return np.transpose(u), T
+
+
+# Poisson learning
+def poisson(W, I, g, true_labels=None, use_cuda=False, training_balance=True, beta=None, min_iter=50, error=None):
+    n = W.shape[0]
+    unique_labels = np.unique(g)
+    k = len(unique_labels)
+    if error is None:
+        error = np.ones(n, dtype=np.float32)
+    else:
+        error = error.reshape((n,)) / np.max(error)
+
+    # Zero out diagonal for faster convergence
+    W = diag_multiply(W, 0)
+
+    # Labels to vector and correct position
+    J = np.zeros(n, )
+    K = np.ones(n, ) * g[0]
+    J[I] = 1
+    K[I] = g
+    Kg, _ = LabelsToVec(K)
+    Kg = Kg * J
+
+    # Poisson source term
+    c = np.sum(Kg, axis=1) / len(I)
+    b = np.transpose(Kg)
+    b[I, :] = 2 * b[I, :] - 1
+
+    # Setup matrices
+    # D = degree_matrix(W + 1e-10 * sparse.identity(n), p=-1)
+    # L = graph_laplacian(W,norm='none')
+    # P = sparse.identity(n) - D*L #Line below is equivalent when W symmetric
+    v_prev = np.random.random(size=(n, 1))
+    residue_energy = 1
+    u = np.zeros((n, k))
+    confidence_gain =   W.transpose() #* sparse.spdiags(np.power(1 + error, -1), 0, n, n)
+    # vals, vec = sparse.linalg.eigs(RW,k=1,which='LM')
+    # vinf = np.absolute(vec.flatten())
+    # vinf = vinf/np.sum(vinf)
+
+    # Number of iterations
+    T = 0
+    if use_cuda:
+
+        Wt = torch_sparse(confidence_gain).cuda()
+        ut = torch.from_numpy(u).float().cuda()
+        bt = torch.from_numpy(b).float().cuda()
+
+        # start_time = time.time()
+        while (T < min_iter or residue_energy > 1e-10) and (T < 1000):
+            ut = torch.sparse.addmm(bt, Wt, ut)
+            v = W.transpose() * v_prev
+            residue_energy = np.linalg.norm(v - v_prev)
+            v_prev = v
+            T = T + 1
+        # print("--- %s seconds ---" % (time.time() - start_time))
+
+        # Transfer to CPU and convert to numpy
+        u = ut.cpu().numpy()
+
+    else:  # Use CPU
+
+        # start_time = time.time()
+        while (T < min_iter or residue_energy > 1e-6) and (T < 1000):
+            u = np.clip(b + confidence_gain * u, a_min=-1, a_max=1)
+            v = W.transpose() * v_prev
+            residue_energy = np.linalg.norm(v - v_prev)
+            v_prev = v
+            T = T + 1
+
+            # Compute accuracy if all labels are provided
+            if true_labels is not None:
+                max_locations = np.argmax(u, axis=1)
+                labels = (np.unique(g))[max_locations]
+                labels[I] = g
+                acc = accuracy(labels, true_labels, len(I))
+                print('%d,Accuracy = %.2f' % (T, acc))
+
+        # print("--- %s seconds ---" % (time.time() - start_time))
+    print(f"T: {T}, residue: {residue_energy}")
     # Balancing for training data/class size discrepancy
     if training_balance:
         if beta is None:
@@ -2580,7 +2710,7 @@ def graph_clustering(W, k, true_labels=None, method="incres", speed=5, T=100, ex
 def graph_ssl(W, I, g, D=None, Ns=40, mu=1, numT=50, beta=None, method="laplace", p=3, volume_mult=0.5, alpha=2,
               zeta=1e7, r=0.1, epsilon=0.05, X=None, plaplace_solver="GradientDescentCcode", norm="none",
               true_labels=None, eigvals=None, eigvecs=None, dataset=None, T=0, use_cuda=False, return_vector=False,
-              poisson_training_balance=True, symmetrize=True):
+              poisson_training_balance=True, symmetrize=True, error=None):
     one_shot_methods = ["mbo", "poisson", "poissonbalanced", "poissonvolume", "poissonmbo_volume", "poissonmbo",
                         "poissonl1", "nearestneighbor", "poissonmbobalanced", "volumembo", "poissonvolumembo",
                         "dynamiclabelpropagation", "sparselabelpropagation", "centeredkernel", "eikonal"]
@@ -2620,7 +2750,7 @@ def graph_ssl(W, I, g, D=None, Ns=40, mu=1, numT=50, beta=None, method="laplace"
             u = poissonL1(W, I, g, dataset, true_labels=true_labels)
         elif method == "poisson":
             u, _ = poisson(W, I, g, true_labels=true_labels, use_cuda=use_cuda,
-                           training_balance=poisson_training_balance)
+                           training_balance=poisson_training_balance, error=error)
         elif method == "poissonbalanced":
             u, _ = poisson(W, I, g, true_labels=true_labels, use_cuda=use_cuda,
                            training_balance=poisson_training_balance, beta=beta)
@@ -2861,7 +2991,9 @@ def plot_graph(X, W, l=None):
 # dataset = name of dataset
 # ssl_methods = list of names of methods to compare
 def accuracy_plot(dataset, ssl_method_list, legend_list, num_of_classes, title=None, errorbars=False, testerror=False,
-                  savefile=None, loglog=False):
+                  savefile=None, loglog=False, log_dirs=None, directed_graph=False):
+    if log_dirs is None:
+        log_dirs = ["Results/"]
     # plt.ion()
     plt.figure()
     if errorbars:
@@ -2869,21 +3001,25 @@ def accuracy_plot(dataset, ssl_method_list, legend_list, num_of_classes, title=N
     matplotlib.rcParams.update({'font.size': 16})
     styles = ['^b-', 'or-', 'dg-', 'sk-', 'pm-', 'xc-', '*y-']
     i = 0
-    for ssl_method in ssl_method_list:
-        accfile = "Results/" + dataset + "_" + ssl_method + "_accuracy.csv"
-        acc, stddev, N, quant, num_trials = accuracy_statistics(accfile)
-        if testerror:
-            acc = 100 - acc
-            # z = np.polyfit(np.log(N),np.log(acc),1)
-            # print(z[0])
-        if errorbars:
-            plt.errorbar(N / num_of_classes, acc, fmt=styles[i], yerr=stddev, label=legend_list[i])
-        else:
-            if loglog:
-                plt.loglog(N / num_of_classes, acc, styles[i], label=legend_list[i])
+    for log in log_dirs:
+        for ssl_method in ssl_method_list:
+            accfile = os.path.join(log, dataset + "_" + ssl_method)
+            if directed_graph:
+                accfile += "_directed"
+            accfile += "_accuracy.csv"
+            acc, stddev, N, quant, num_trials = accuracy_statistics(accfile)
+            if testerror:
+                acc = 100 - acc
+                # z = np.polyfit(np.log(N),np.log(acc),1)
+                # print(z[0])
+            if errorbars:
+                plt.errorbar(N / num_of_classes, acc, fmt=styles[i], yerr=stddev, label=legend_list[i])
             else:
-                plt.plot(N / num_of_classes, acc, styles[i], label=legend_list[i])
-        i += 1
+                if loglog:
+                    plt.loglog(N / num_of_classes, acc, styles[i], label=legend_list[i])
+                else:
+                    plt.plot(N / num_of_classes, acc, styles[i], label=legend_list[i])
+            i += 1
     plt.xlabel('Number of labels per class')
     if testerror:
         plt.ylabel('Test error (%)')
@@ -3062,8 +3198,8 @@ def main(dataset=default_dataset(), metric=default_metric(), algorithm=default_a
     I, J, D = load_kNN_data(dataset, metric=metric)
 
     # Consturct weight matrix and distance matrix
-    W = weight_matrix(I, J, D, k, symmetrize=False)
-    Wdist = dist_matrix(I, J, D, k)
+    W, error = nnk_weight_matrix(dataset, metric, mask=J, knn_param=k, symmetrize=not directed_graph)
+    Wdist = None  # dist_matrix(I, J, D, k)
 
     # Load label permutation (including restrictions in t)
     perm = load_label_permutation(dataset, label_perm=label_perm, t=t)
@@ -3090,7 +3226,8 @@ def main(dataset=default_dataset(), metric=default_metric(), algorithm=default_a
 
     if algorithm == 'poisson' and poisson_training_balance == False:
         outfile = outfile + "_NoBal"
-
+    if directed_graph:
+        outfile += "_directed"
     outfile = outfile + "_accuracy.csv"
 
     # Print basic info
@@ -3177,7 +3314,7 @@ def main(dataset=default_dataset(), metric=default_metric(), algorithm=default_a
             u = graph_ssl(W, label_ind, labels[label_ind], D=Wdist, beta=beta, method=algorithm, epsilon=0.3, p=p,
                           norm=norm, eigvals=eigvals, eigvecs=eigvecs, dataset=dataset, T=T, use_cuda=use_cuda,
                           volume_mult=volume_constraint, true_labels=true_labels,
-                          poisson_training_balance=poisson_training_balance, symmetrize=not directed_graph)
+                          poisson_training_balance=poisson_training_balance, symmetrize=not directed_graph, error=error)
             print("--- %s seconds ---" % (time.time() - start_time))
 
             # Compute accuracy

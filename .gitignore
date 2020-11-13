@@ -4,3 +4,6 @@ __pycache__*
 Results/*
 Data/*
 cmodules/*
+kNNData
+Results*
+*.pdf
